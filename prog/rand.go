@@ -583,6 +583,7 @@ func (r *randGen) generateParticularCall(s *state, meta *Syscall) (calls []*Call
 	c := MakeCall(meta, nil)
 	c.Args, calls = r.generateArgs(s, meta.Args, DirIn)
 	r.target.assignSizesCall(c)
+	c.Props.ThreadIndex = (int)(r.randInt(32) % 3)
 	return append(calls, c)
 }
 
@@ -619,6 +620,7 @@ func (target *Target) GenerateAllSyzProg(rs rand.Source) *Prog {
 func (target *Target) DataMmapProg() *Prog {
 	return &Prog{
 		Target: target,
+		ThreadSchedule: []int{0, 1},
 		Calls:  target.MakeDataMmap(),
 	}
 }

@@ -67,14 +67,21 @@ func (proc *Proc) loop() {
 		generatePeriod = 2
 	}
 	for i := 0; ; i++ {
+		log.Logf(1, "AAAA main loop: i=%d\n", i)
+
+		log.Logf(1, "AAAA queue: triageCandidate=%d candidate=%d triage=%d smash=%d\n", len(proc.fuzzer.workQueue.triageCandidate), len(proc.fuzzer.workQueue.candidate), len(proc.fuzzer.workQueue.triage), len(proc.fuzzer.workQueue.smash))
+
 		item := proc.fuzzer.workQueue.dequeue()
 		if item != nil {
 			switch item := item.(type) {
 			case *WorkTriage:
+				log.Logf(1, "AAAA WorkTriage\n")
 				proc.triageInput(item)
 			case *WorkCandidate:
+				log.Logf(1, "AAAA WorkCandidate\n")
 				proc.execute(proc.execOpts, item.p, item.flags, StatCandidate)
 			case *WorkSmash:
+				log.Logf(1, "AAAA WorkSmash\n")
 				proc.smashInput(item)
 			default:
 				log.Fatalf("unknown work type: %#v", item)
@@ -216,6 +223,13 @@ func (proc *Proc) smashInput(item *WorkSmash) {
 	fuzzerSnapshot := proc.fuzzer.snapshot()
 	for i := 0; i < 100; i++ {
 		p := item.p.Clone()
+		p.MutateThreadSchedule(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
+		log.Logf(1, "#%v: smash mutated thread-schedule", proc.pid)
+		proc.executeAndCollide(proc.execOpts, p, ProgNormal, StatSmashThreadSchedule)
+	}
+
+	for i := 0; i < 100; i++ {
+		p := item.p.Clone()
 		p.Mutate(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
 		log.Logf(1, "#%v: smash mutated", proc.pid)
 		proc.executeAndCollide(proc.execOpts, p, ProgNormal, StatSmash)
@@ -310,6 +324,14 @@ func (proc *Proc) randomCollide(origP *prog.Prog) *prog.Prog {
 
 func (proc *Proc) executeRaw(opts *ipc.ExecOpts, p *prog.Prog, stat Stat) *ipc.ProgInfo {
 	proc.fuzzer.checkDisabledCalls(p)
+
+	if p.ShouldExecuteProg() {
+		atomic.AddUint64(&proc.fuzzer.stats[StatShouldExecute], 1)
+	} else {
+		atomic.AddUint64(&proc.fuzzer.stats[StatShouldNotExecute], 1)
+		log.Logf(1, "AAAA skipping execute, !p.ShouldExecuteProg()")
+		return nil
+	}
 
 	// Limit concurrency window and do leak checking once in a while.
 	ticket := proc.fuzzer.gate.Enter()

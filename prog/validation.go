@@ -33,6 +33,28 @@ func (p *Prog) validate() error {
 		args:   make(map[Arg]bool),
 		uses:   make(map[Arg]Arg),
 	}
+	if len(p.ThreadSchedule) == 0 {
+		return fmt.Errorf("prog does not have thread schedule")
+	} else {
+		found1 := false
+		found2 := false
+		for _, thread := range p.ThreadSchedule {
+			if thread == 0 {
+				found1 = true
+			} else if thread == 1 {
+				found2 = true
+			}
+		}
+
+		if !found1 {
+			return fmt.Errorf("prog does not schedule for thread 0: %v", p.ThreadSchedule)
+		}
+
+		if !found2 {
+			return fmt.Errorf("prog does not schedule for thread 1: %v", p.ThreadSchedule)
+		}
+	}
+
 	for _, c := range p.Calls {
 		if c.Meta == nil {
 			return fmt.Errorf("call does not have meta information")

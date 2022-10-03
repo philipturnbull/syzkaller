@@ -66,7 +66,8 @@ typedef unsigned char uint8;
 // Note: zircon max fd is 256.
 // Some common_OS.h files know about this constant for RLIMIT_NOFILE.
 const int kMaxFd = 250;
-const int kMaxThreads = 32;
+const int kMaxThreads = 3;
+const int kMaxThreadCalls = 256;
 const int kInPipeFd = kMaxFd - 1; // remapped from stdin
 const int kOutPipeFd = kMaxFd - 2; // remapped from stdout
 const int kCoverFd = kOutPipeFd - kMaxThreads;
@@ -193,6 +194,28 @@ static uint64 program_timeout_ms;
 static uint64 slowdown_scale;
 
 #define SYZ_EXECUTOR 1
+struct thread_call_call_t {
+	uint64 *boundary;
+	call_props_t props;
+	int index;
+};
+
+struct thread_t;
+struct thread_call_t {
+	pthread_t th;
+	struct thread_t *thread;
+	uint64_t thread_index;
+	uint64 num_calls;
+	thread_call_call_t calls[kMaxThreadCalls];
+};
+
+// index 0 is not a thread, it will be run in the parent
+static thread_call_t thread_calls[kMaxThreads + 1];
+const uint64_t kMaxThreadIndexes = 4096;
+#define PR_SET_FUZZ_PARENT 65
+static uint64_t thread_schedule_length;
+static unsigned char thread_schedule[kMaxThreadIndexes];
+
 #include "common.h"
 
 const int kMaxInput = 4 << 20; // keep in sync with prog.ExecBufferSize
@@ -202,6 +225,7 @@ const uint64 instr_eof = -1;
 const uint64 instr_copyin = -2;
 const uint64 instr_copyout = -3;
 const uint64 instr_setprops = -4;
+const uint64 instr_thread_schedule = -5;
 
 const uint64 arg_const = 0;
 const uint64 arg_result = 1;
@@ -482,6 +506,7 @@ int main(int argc, char** argv)
 #else
 	receive_execute();
 #endif
+	debug("flag_coverge=%d\n", flag_coverage);
 	if (flag_coverage) {
 		int create_count = kCoverDefaultCount, mmap_count = create_count;
 		if (flag_delay_kcov_mmap) {
@@ -492,6 +517,7 @@ int main(int argc, char** argv)
 			create_count = kMaxThreads;
 		for (int i = 0; i < create_count; i++) {
 			threads[i].cov.fd = kCoverFd + i;
+			debug("threads[%d].cov.fd = %d\n", i, threads[i].cov.fd);
 			cover_open(&threads[i].cov, false);
 			if (i < mmap_count) {
 				// Pre-mmap coverage collection for some threads. This should be enough for almost
@@ -743,8 +769,294 @@ void realloc_output_data()
 }
 #endif
 
-// execute_one executes program stored in input_data.
+void parent_copyin()
+{
+	uint64* input_pos = (uint64*)input_data;
+
+	int call_index = 0;
+	call_props_t call_props;
+	memset(&call_props, 0, sizeof(call_props));
+
+	for (;;) {
+		uint64* boundary = input_pos;
+		uint64 call_num = read_input(&input_pos);
+		if (call_num == instr_eof)
+			break;
+		if (call_num == instr_copyin) {
+			char* addr = (char*)read_input(&input_pos);
+			uint64 typ = read_input(&input_pos);
+			switch (typ) {
+			case arg_const: {
+				uint64 size, bf, bf_off, bf_len;
+				uint64 arg = read_const_arg(&input_pos, &size, &bf, &bf_off, &bf_len);
+				copyin(addr, arg, size, bf, bf_off, bf_len);
+				break;
+			}
+			case arg_result: {
+				uint64 meta = read_input(&input_pos);
+				uint64 size = meta & 0xff;
+				uint64 bf = meta >> 8;
+				uint64 val = read_result(&input_pos);
+				copyin(addr, val, size, bf, 0, 0);
+				break;
+			}
+			case arg_data: {
+				uint64 size = read_input(&input_pos);
+				size &= ~(1ull << 63); // readable flag
+				NONFAILING(memcpy(addr, input_pos, size));
+				// Read out the data.
+				for (uint64 i = 0; i < (size + 7) / 8; i++)
+					read_input(&input_pos);
+				break;
+			}
+			case arg_csum: {
+				debug_verbose("checksum found at %p\n", addr);
+				uint64 size = read_input(&input_pos);
+				char* csum_addr = addr;
+				uint64 csum_kind = read_input(&input_pos);
+				switch (csum_kind) {
+				case arg_csum_inet: {
+					if (size != 2)
+						failmsg("bag inet checksum size", "size=%llu", size);
+					debug_verbose("calculating checksum for %p\n", csum_addr);
+					struct csum_inet csum;
+					csum_inet_init(&csum);
+					uint64 chunks_num = read_input(&input_pos);
+					uint64 chunk;
+					for (chunk = 0; chunk < chunks_num; chunk++) {
+						uint64 chunk_kind = read_input(&input_pos);
+						uint64 chunk_value = read_input(&input_pos);
+						uint64 chunk_size = read_input(&input_pos);
+						switch (chunk_kind) {
+						case arg_csum_chunk_data:
+							debug_verbose("#%lld: data chunk, addr: %llx, size: %llu\n",
+								      chunk, chunk_value, chunk_size);
+							NONFAILING(csum_inet_update(&csum, (const uint8*)chunk_value, chunk_size));
+							break;
+						case arg_csum_chunk_const:
+							if (chunk_size != 2 && chunk_size != 4 && chunk_size != 8)
+								failmsg("bad checksum const chunk size", "size=%lld", chunk_size);
+							// Here we assume that const values come to us big endian.
+							debug_verbose("#%lld: const chunk, value: %llx, size: %llu\n",
+								      chunk, chunk_value, chunk_size);
+							csum_inet_update(&csum, (const uint8*)&chunk_value, chunk_size);
+							break;
+						default:
+							failmsg("bad checksum chunk kind", "kind=%llu", chunk_kind);
+						}
+					}
+					uint16 csum_value = csum_inet_digest(&csum);
+					debug_verbose("writing inet checksum %hx to %p\n", csum_value, csum_addr);
+					copyin(csum_addr, csum_value, 2, binary_format_native, 0, 0);
+					break;
+				}
+				default:
+					failmsg("bad checksum kind", "kind=%llu", csum_kind);
+				}
+				break;
+			}
+			default:
+				failmsg("bad argument type", "type=%llu", typ);
+			}
+			continue;
+		}
+		if (call_num == instr_copyout) {
+			read_input(&input_pos); // index
+			read_input(&input_pos); // addr
+			read_input(&input_pos); // size
+			// The copyout will happen when/if the call completes.
+			continue;
+		}
+		if (call_num == instr_setprops) {
+			read_call_props_t(call_props, read_input(&input_pos, false));
+			if (call_props.fail_nth)
+				fail("fail_nth should not be set");
+			if (call_props.async)
+				fail("async should not be set");
+			if (call_props.rerun)
+				fail("rerun should not be set");
+			continue;
+		}
+		if (call_num == instr_thread_schedule) {
+			uint64_t num_thread_indexes = read_input(&input_pos);
+			uint64_t i = 0;
+			for(uint64_t n = 0; n < num_thread_indexes; n++) {
+				uint64_t index = read_input(&input_pos);
+				if (i < kMaxThreadIndexes) {
+					thread_schedule[i++] = (unsigned char)index;
+				}
+			}
+
+			thread_schedule_length = std::min(kMaxThreadIndexes, num_thread_indexes);
+
+			continue;
+		}
+
+		// Normal syscall.
+		if (call_num >= ARRAY_SIZE(syscalls))
+			failmsg("invalid syscall number", "call_num=%llu", call_num);
+		const call_t* call = &syscalls[call_num];
+		if (call->attrs.disabled)
+			failmsg("executing disabled syscall", "syscall=%s", call->name);
+
+		// uint64 copyout_index =
+		read_input(&input_pos);
+		uint64 num_args = read_input(&input_pos);
+		if (num_args > kMaxArgs)
+			failmsg("command has bad number of arguments", "args=%llu", num_args);
+		for (uint64 i = 0; i < num_args; i++)
+			read_arg(&input_pos);
+
+		// debug("%s: call_num=%llu copyout_index=%llu input_pos=%p\n", __func__, call_num, copyout_index, input_pos);
+
+		struct thread_call_t *thread_call = &thread_calls[call_props.thread_index];
+		struct thread_call_call_t *thread_call_call = &thread_call->calls[thread_call->num_calls++];
+		thread_call_call->boundary = boundary;
+		thread_call_call->props = call_props;
+		thread_call_call->index = call_index++;
+
+		debug("copyin_parent: added call %d to thread %d\n", thread_call_call->index, call_props.thread_index);
+
+		memset(&call_props, 0, sizeof(call_props));
+	}
+}
+
+void *child_execute(void *thread_call_)
+{
+	struct thread_call_t *thread_call = (struct thread_call_t *)thread_call_;
+
+	thread_t *th = thread_call->thread;
+
+	if (cover_collection_required())
+		cover_enable(&th->cov, flag_comparisons, false);
+
+	for (uint64_t call_index = 0; call_index < thread_call->num_calls; call_index++) {
+		thread_call_call_t *thread_call_call = &thread_call->calls[call_index];
+		uint64 *input_pos = thread_call_call->boundary;
+		uint64 prog_extra_timeout = 0;
+		uint64 prog_extra_cover_timeout = 0;
+		call_props_t call_props = thread_call_call->props;
+
+		uint64 call_num = read_input(&input_pos);
+
+		// Normal syscall.
+		if (call_num >= ARRAY_SIZE(syscalls))
+			failmsg("invalid syscall number", "call_num=%llu", call_num);
+		const call_t* call = &syscalls[call_num];
+		if (call->attrs.disabled)
+			failmsg("executing disabled syscall", "syscall=%s", call->name);
+		if (prog_extra_timeout < call->attrs.prog_timeout)
+			prog_extra_timeout = call->attrs.prog_timeout * slowdown_scale;
+		if (strncmp(syscalls[call_num].name, "syz_usb", strlen("syz_usb")) == 0)
+			prog_extra_cover_timeout = std::max(prog_extra_cover_timeout, 500 * slowdown_scale);
+		if (strncmp(syscalls[call_num].name, "syz_80211_inject_frame", strlen("syz_80211_inject_frame")) == 0)
+			prog_extra_cover_timeout = std::max(prog_extra_cover_timeout, 300 * slowdown_scale);
+		uint64 copyout_index = read_input(&input_pos);
+		uint64 num_args = read_input(&input_pos);
+		if (num_args > kMaxArgs)
+			failmsg("command has bad number of arguments", "args=%llu", num_args);
+		uint64 args[kMaxArgs] = {};
+		for (uint64 i = 0; i < num_args; i++)
+			args[i] = read_arg(&input_pos);
+		for (uint64 i = num_args; i < kMaxArgs; i++)
+			args[i] = 0;
+
+		// debug("%s: call_num=%llu copyout_index=%llu input_pos=%p\n", __func__, call_num, copyout_index, input_pos);
+
+		// thread_t t;
+		// memset(&t, 0, sizeof(t));
+
+		th->created = true;
+		th->id = thread_call->thread_index;
+		th->executing = true;
+
+		event_init(&th->ready);
+		event_init(&th->done);
+		event_set(&th->done);
+
+		th->copyout_pos = input_pos;
+		th->copyout_index = copyout_index;
+		th->executing = true;
+		th->call_index = thread_call_call->index;
+		th->call_num = call_num;
+		th->num_args = num_args;
+		th->call_props = call_props;
+		for (int i = 0; i < kMaxArgs; i++)
+			th->args[i] = args[i];
+
+		running++;
+		execute_call(th);
+		handle_completion(th);
+	}
+
+	return NULL;
+}
+
+cover_t parent_thread_coverage;
 void execute_one()
+{
+	size_t num_threads = 2;
+#if SYZ_EXECUTOR_USES_SHMEM
+	realloc_output_data();
+	output_pos = output_data;
+	write_output(0);
+#else
+	unsupported
+#endif
+	if (flag_threaded)
+		fail("threaded must be zero");
+
+	if (cover_collection_required()) {
+		if (flag_extra_coverage)
+			cover_reset(&extra_cov);
+	}
+
+	parent_copyin();
+
+	if (thread_schedule_length == 0) {
+		fail("thread_schedule not initialized");
+	}
+
+	debug("thread_schedule = ");
+	for (uint64_t i = 0; i < thread_schedule_length; i++) {
+		debug("%c", thread_schedule[i] + '0');
+	}
+	debug("\n");
+
+	thread_calls[0].thread = &threads[0];
+	child_execute(&thread_calls[0]);
+	int error = prctl(PR_SET_FUZZ_PARENT, 0, num_threads, &thread_schedule[0], thread_schedule_length);
+	if (error) {
+		fail("prctl(PR_SET_FUZZ_PARENT, ...) failed");
+	}
+
+	for (size_t i = 0; i < num_threads; i++) {
+		uint64_t thread_index = i + 1;
+		thread_call_t *thread_call = &thread_calls[thread_index];
+		thread_call->thread_index = thread_index;
+		thread_call->thread = &threads[thread_index];
+		debug("thread_call->thread = &threads[%ld];\n", thread_index);
+		debug("thread_call->thread->cov.fd = %d\n", thread_call->thread->cov.fd);
+
+		thread_start(child_execute, thread_call);
+	}
+
+	usleep(100);
+
+	for (int i = 0; i < kMaxThreads; i++) {
+		thread_call_t *thread_call = &thread_calls[i + 1];
+		pthread_join(thread_call->th, NULL);
+	}
+
+#if SYZ_HAVE_CLOSE_FDS
+	close_fds();
+#endif
+
+	write_extra_output();
+}
+
+// execute_one executes program stored in input_data.
+void old_execute_one()
 {
 #if SYZ_EXECUTOR_USES_SHMEM
 	realloc_output_data();
@@ -1248,8 +1560,10 @@ void* worker_thread(void* arg)
 
 void execute_call(thread_t* th)
 {
+	pid_t tid = gettid();
+
 	const call_t* call = &syscalls[th->call_num];
-	debug("#%d [%llums] -> %s(",
+	debug("tid=%d #%d [%llums] -> %s(", tid,
 	      th->id, current_time_ms() - start_time_ms, call->name);
 	for (int i = 0; i < th->num_args; i++) {
 		if (i != 0)
@@ -1296,7 +1610,7 @@ void execute_call(thread_t* th)
 	for (int i = 0; i < th->call_props.rerun; i++)
 		NONFAILING(execute_syscall(call, th->args));
 
-	debug("#%d [%llums] <- %s=0x%llx",
+	debug("tid=%d #%d [%llums] <- %s=0x%llx", tid,
 	      th->id, current_time_ms() - start_time_ms, call->name, (uint64)th->res);
 	if (th->res == (intptr_t)-1)
 		debug(" errno=%d", th->reserrno);
@@ -1306,6 +1620,7 @@ void execute_call(thread_t* th)
 		debug(" fault=%d", th->fault_injected);
 	if (th->call_props.rerun > 0)
 		debug(" rerun=%d", th->call_props.rerun);
+	debug(" thread_index=%d", th->call_props.thread_index);
 	debug("\n");
 }
 

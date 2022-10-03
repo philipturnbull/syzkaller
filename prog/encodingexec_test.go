@@ -481,17 +481,17 @@ test() (async, rerun: 10)
 					{
 						Meta:  target.SyscallMap["test"],
 						Index: ExecNoCopyout,
-						Props: CallProps{3, false, 0},
+						Props: CallProps{3, false, 0, 0},
 					},
 					{
 						Meta:  target.SyscallMap["test"],
 						Index: ExecNoCopyout,
-						Props: CallProps{4, false, 0},
+						Props: CallProps{4, false, 0, 0},
 					},
 					{
 						Meta:  target.SyscallMap["test"],
 						Index: ExecNoCopyout,
-						Props: CallProps{0, true, 10},
+						Props: CallProps{0, true, 10, 0},
 					},
 				},
 			},

@@ -119,7 +119,7 @@ static void cover_enable(cover_t* cov, bool collect_comps, bool extra)
 	// so we use exitf.
 	if (!extra) {
 		if (ioctl(cov->fd, KCOV_ENABLE, kcov_mode))
-			exitf("cover enable write trace failed, mode=%d", kcov_mode);
+			exitf("cover enable write trace failed, fd=%d mode=%d", cov->fd, kcov_mode);
 		return;
 	}
 	kcov_remote_arg<1> arg = {

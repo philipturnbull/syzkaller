@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"reflect"
 	"runtime"
 	"strings"
 	"time"
@@ -29,7 +30,65 @@ var (
 	flagCorpus = flag.String("corpus", "", "name of the corpus file")
 )
 
+func testMutateSchedule() {
+	ts := []int{}
+	newTS := []int{}
+
+	ts = []int{0, 1, 2}
+	newTS = prog.InsertThread(ts, 0, 3)
+	if !reflect.DeepEqual(newTS, []int{3, 0, 1, 2}) {
+		panic(fmt.Sprintf("InsertThread(0, 1): ts=%v newTS=%v\n", ts, newTS))
+	}
+	
+	ts = []int{0, 1, 2}
+	newTS = prog.InsertThread(ts, 1, 3)
+	if !reflect.DeepEqual(newTS, []int{0, 3, 1, 2}) {
+		panic(fmt.Sprintf("InsertThread(1, 1): ts=%v newTS=%v\n", ts, newTS))
+	}
+	
+	ts = []int{0, 1, 2}
+	newTS = prog.InsertThread(ts, 2, 3)
+	if !reflect.DeepEqual(newTS, []int{0, 1, 3, 2}) {
+		panic(fmt.Sprintf("InsertThread(1, 1): ts=%v newTS=%v\n", ts, newTS))
+	}
+	
+	ts = []int{0, 1, 2}
+	newTS = prog.DeleteThread(ts, 0)
+	if !reflect.DeepEqual(newTS, []int{1, 2}) {
+		panic(fmt.Sprintf("DeleteThread(0): ts=%v newTS=%v\n", ts, newTS))
+	}
+	
+	ts = []int{0, 1, 2}
+	newTS = prog.DeleteThread(ts, 1)
+	if !reflect.DeepEqual(newTS, []int{0, 2}) {
+		panic(fmt.Sprintf("DeleteThread(1): ts=%v newTS=%v\n", ts, newTS))
+	}
+
+	ts = []int{0, 1, 2}
+	newTS = prog.DeleteThread(ts, 2)
+	if !reflect.DeepEqual(newTS, []int{0, 1}) {
+		panic(fmt.Sprintf("DeleteThread(1): ts=%v newTS=%v\n", ts, newTS))
+	}
+
+	ts = []int{0, 1}
+	newTS = prog.InvertThread(ts, 0)
+	if !reflect.DeepEqual(newTS, []int{1, 1}) {
+		panic(fmt.Sprintf("DeleteThread(1): ts=%v newTS=%v\n", ts, newTS))
+	}
+
+	ts = []int{0, 1}
+	newTS = prog.InvertThread(ts, 1)
+	if !reflect.DeepEqual(newTS, []int{0, 0}) {
+		panic(fmt.Sprintf("DeleteThread(1): ts=%v newTS=%v\n", ts, newTS))
+	}
+}
+	
+
+
+
 func main() {
+	testMutateSchedule()
+
 	flag.Parse()
 	target, err := prog.GetTarget(*flagOS, *flagArch)
 	if err != nil {

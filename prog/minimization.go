@@ -75,6 +75,11 @@ func removeCalls(p0 *Prog, callIndex0 int, crash bool, pred func(*Prog, int) boo
 		if i < callIndex {
 			callIndex--
 		}
+
+		if p0.CallRemovalWouldRemoveThread(i) {
+			continue
+		}
+
 		p := p0.Clone()
 		p.RemoveCall(i)
 		if !pred(p, callIndex) {
@@ -93,7 +98,7 @@ func resetCallProps(p0 *Prog, callIndex0 int, pred func(*Prog, int) bool) *Prog 
 	anyDifferent := false
 	for idx := range p.Calls {
 		if !reflect.DeepEqual(p.Calls[idx].Props, CallProps{}) {
-			p.Calls[idx].Props = CallProps{}
+			p.Calls[idx].Props = CallProps{ThreadIndex: p.Calls[idx].Props.ThreadIndex}
 			anyDifferent = true
 		}
 	}

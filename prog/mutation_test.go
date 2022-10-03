@@ -7,10 +7,30 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"testing"
 
 	"github.com/google/syzkaller/pkg/testutil"
 )
+
+func TestMutateSchedule(t *testing.T) {
+	ts := []int{}
+	newTS := []int{}
+
+	
+	ts = []int{0, 1}
+	newTS = insertThread(ts, 0, 1)
+	if reflect.DeepEqual(newTS, []int{1, 0, 1}) {
+		t.Fatalf("insertThread(0, 1): ts=%v newTS=%v\n", ts, newTS)
+	}
+	
+	ts = []int{0, 1}
+	newTS = insertThread(ts, 1, 1)
+	if reflect.DeepEqual(newTS, []int{0, 1, 1}) {
+		t.Fatalf("insertThread(1, 1): ts=%v newTS=%v\n", ts, newTS)
+	}
+}
+	
 
 func TestMutationFlags(t *testing.T) {
 	tests := [][2]string{

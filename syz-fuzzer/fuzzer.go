@@ -83,10 +83,13 @@ const (
 	StatTriage
 	StatMinimize
 	StatSmash
+	StatSmashThreadSchedule
 	StatHint
 	StatSeed
 	StatCollide
 	StatBufferTooSmall
+	StatShouldExecute
+	StatShouldNotExecute
 	StatCount
 )
 
@@ -97,10 +100,13 @@ var statNames = [StatCount]string{
 	StatTriage:         "exec triage",
 	StatMinimize:       "exec minimize",
 	StatSmash:          "exec smash",
+	StatSmashThreadSchedule: "exec smash thread",
 	StatHint:           "exec hints",
 	StatSeed:           "exec seeds",
 	StatCollide:        "exec collide",
 	StatBufferTooSmall: "buffer too small",
+	StatShouldExecute: "should execute",
+	StatShouldNotExecute: "should not execute",
 }
 
 type OutputType int

@@ -40,6 +40,7 @@ func (p *Prog) serialize(verbose bool) []byte {
 		vars:    make(map[*ResultArg]int),
 		verbose: verbose,
 	}
+	ctx.threadSchedule(p.ThreadSchedule)
 	for _, c := range p.Calls {
 		ctx.call(c)
 	}
@@ -63,6 +64,16 @@ func (ctx *serializer) allocVarID(arg *ResultArg) int {
 	ctx.varSeq++
 	ctx.vars[arg] = id
 	return id
+}
+
+func (ctx *serializer) threadSchedule(schedule []int) {
+	if len(schedule) > 0 {
+		ctx.printf("threadSchedule(")
+		for _, threadIndex := range schedule {
+			ctx.printf("%d", threadIndex)
+		}
+		ctx.printf(")\n")
+	}
 }
 
 func (ctx *serializer) call(c *Call) {
@@ -289,6 +300,36 @@ func (p *parser) parseProg() (*Prog, error) {
 			p.Parse('=')
 			name = p.Ident()
 		}
+
+		if name == "threadSchedule" {
+			if prog.ThreadSchedule != nil {
+				p.strictFailf("only one 'threadSchedule` call expected")
+			}
+
+			if len(prog.Calls) > 0 {
+				p.strictFailf("'threadSchedule` call should be the first call")
+			}
+
+			threadSchedule := []int{}
+			p.Parse('(')
+
+			for p.e == nil && p.Char() != ')' {
+				threadIndex := p.consume()
+				switch threadIndex {
+					case '0':
+						threadSchedule = append(threadSchedule, 0)
+					case '1':
+						threadSchedule = append(threadSchedule, 1)
+					default:
+						p.strictFailf("invalid thread schedule: '%c'", threadIndex)
+				}
+			}
+
+			p.Parse(')')
+			prog.ThreadSchedule = threadSchedule
+			continue
+		}
+
 		meta := p.target.SyscallMap[name]
 		if meta == nil {
 			return nil, fmt.Errorf("unknown syscall %v", name)
@@ -347,6 +388,10 @@ func (p *parser) parseProg() (*Prog, error) {
 	if p.comment != "" {
 		prog.Comments = append(prog.Comments, p.comment)
 	}
+
+	if prog.ThreadSchedule == nil {
+		p.strictFailf("no 'threadSchedule' call found")
+	}
 	return prog, nil
 }
 
@@ -354,6 +399,7 @@ func (p *parser) parseCallProps() CallProps {
 	nameToValue := map[string]reflect.Value{}
 	callProps := CallProps{}
 	callProps.ForeachProp(func(_, key string, value reflect.Value) {
+		// here is where the key is set
 		nameToValue[key] = value
 	})
 

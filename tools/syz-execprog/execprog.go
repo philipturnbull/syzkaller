@@ -163,6 +163,8 @@ func (ctx *Context) execute(pid int, env *ipc.Env, p *prog.Prog) {
 	ticket := ctx.gate.Enter()
 	defer ctx.gate.Leave(ticket)
 
+	log.Logf(1, "AAAA p.ShouldExecuteProg() = %v\n", p.ShouldExecuteProg())
+
 	callOpts := ctx.execOpts
 	if *flagOutput {
 		ctx.logProgram(pid, p, callOpts)

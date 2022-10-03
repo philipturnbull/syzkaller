@@ -17,6 +17,7 @@ import (
 	"unsafe"
 
 	"github.com/google/syzkaller/pkg/cover"
+	"github.com/google/syzkaller/pkg/log"
 	"github.com/google/syzkaller/pkg/osutil"
 	"github.com/google/syzkaller/pkg/signal"
 	"github.com/google/syzkaller/prog"
@@ -338,6 +339,7 @@ func (env *Env) parseOutput(p *prog.Prog, opts *ExecOpts) (*ProgInfo, error) {
 			return nil, fmt.Errorf("failed to read call %v reply", i)
 		}
 		reply := *(*callReply)(unsafe.Pointer(&out[0]))
+		log.Logf(1, "reply=%v", reply)
 		out = out[unsafe.Sizeof(callReply{}):]
 		var inf *CallInfo
 		if reply.magic != outMagic {

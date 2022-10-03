@@ -351,7 +351,7 @@ static int fault_injected(int fail_fd)
 
 static void thread_start(void* (*fn)(void*), void* arg)
 {
-	pthread_t th;
+	struct thread_call_t *thread_call = (struct thread_call_t *)arg;
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 	pthread_attr_setstacksize(&attr, 128 << 10);
@@ -360,7 +360,7 @@ static void thread_start(void* (*fn)(void*), void* arg)
 	// In one case we want to retry infinitely, in another -- fail immidiately...
 	int i = 0;
 	for (; i < 100; i++) {
-		if (pthread_create(&th, &attr, fn, arg) == 0) {
+		if (pthread_create(&thread_call->th, &attr, fn, arg) == 0) {
 			pthread_attr_destroy(&attr);
 			return;
 		}
