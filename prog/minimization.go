@@ -27,11 +27,11 @@ func Minimize(p0 *Prog, callIndex0 int, crash bool, pred0 func(*Prog, int) bool)
 		name0 = p0.Calls[callIndex0].Meta.Name
 	}
 
-	// Try to remove all calls except the last one one-by-one.
-	p0, callIndex0 = removeCalls(p0, callIndex0, crash, pred)
-
-	// Try to reset all call props to their default values.
-	p0 = resetCallProps(p0, callIndex0, pred)
+//	// Try to remove all calls except the last one one-by-one.
+//	p0, callIndex0 = removeCalls(p0, callIndex0, crash, pred)
+//
+//	// Try to reset all call props to their default values.
+//	p0 = resetCallProps(p0, callIndex0, pred)
 
 	// Try to minimize individual calls.
 	for i := 0; i < len(p0.Calls); i++ {
