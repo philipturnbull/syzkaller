@@ -1,0 +1,37 @@
+{
+        "target": "linux/amd64",
+        "http": "127.0.0.1:56741",
+        "workdir": "$BASE/syzkaller/workdir",
+        "kernel_obj": "$BASE/linux",
+        "image": "$BASE/image/stretch.img",
+        "sshkey": "$BASE/image/stretch.id_rsa",
+        "syzkaller": "$BASE/syzkaller",
+        "procs": 1,
+        "type": "qemu",
+        "vm": {
+                "count": $NUM_VMS,
+                "kernel": "$BASE/linux/arch/x86/boot/bzImage",
+                "cpu": 2,
+                "mem": 2048
+        },
+        "sandbox": "setuid",
+        "fuzzing_vms": $NUM_FUZZING_VMS,
+        "disable_syscalls": [
+                "getpriority",
+                "init_module",
+                "prctl",
+                "sched_getaffinity",
+                "sched_getattr",
+                "sched_getparam",
+                "sched_getscheduler",
+                "sched_rr_get_interval",
+                "sched_setaffinity",
+                "sched_setattr",
+                "sched_setparam",
+                "sched_setscheduler",
+                "sched_yield",
+                "setpriority",
+		"syz_clone",
+                "times"
+        ]
+}
