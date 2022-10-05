@@ -16,6 +16,7 @@
         },
         "sandbox": "setuid",
         "fuzzing_vms": $NUM_FUZZING_VMS,
+        "enable_syscalls": [ $SYSCALLS ],
         "disable_syscalls": [
                 "getpriority",
                 "init_module",
@@ -31,7 +32,7 @@
                 "sched_setscheduler",
                 "sched_yield",
                 "setpriority",
-		"syz_clone",
+                "syz_clone",
                 "times"
         ]
 }
