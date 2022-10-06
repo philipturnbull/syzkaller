@@ -623,6 +623,16 @@ func findOverlap(overlaps map[Arg]resultUsage, thread int, arg Arg) {
 	}
 }
 
+func callUsesAnyResultArg(c Call) bool {
+	for _, arg := range c.Args {
+		if argUsesResultArg(arg) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (p *Prog) ShouldExecuteProg() bool {
 	if !p.HasAllThreads() {
 		return false
@@ -636,8 +646,8 @@ func (p *Prog) ShouldExecuteProg() bool {
 		//log.Logf(1, "AAAA ti=%d call=%#v\n", ti, call)
 
 		if ti == 0 {
-			if call.Ret == nil {
-				/* All syscalls on the parent thread must allocate a resource */
+			if call.Ret == nil && !callUsesAnyResultArg(call) {
+				/* All syscalls on the parent thread must allocate a resource or use a resource*/
 				return false
 			}
 		} else {
