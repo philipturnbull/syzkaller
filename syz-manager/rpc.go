@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sort"
 	"sync"
 	"time"
 
@@ -240,6 +241,18 @@ func (serv *RPCServer) Check(a *rpctype.CheckArgs, r *int) error {
 	for _, feat := range a.Features.Supported() {
 		log.Logf(0, "%-24v: %v", feat.Name, feat.Reason)
 	}
+
+	enabledLog := []string{}
+	for syscall, _ := range serv.targetEnabledSyscalls {
+		enabledLog = append(enabledLog, syscall.Name)
+	}
+	sort.Strings(enabledLog)
+
+	log.Logf(0, "enabled syscalls:")
+	for _, syscallName := range enabledLog {
+		log.Logf(0, "  %s", syscallName)
+	}
+
 	serv.mgr.machineChecked(a, serv.targetEnabledSyscalls)
 	a.DisabledCalls = nil
 	serv.checkResult = a
