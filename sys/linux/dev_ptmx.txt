@@ -74,13 +74,14 @@ ioctl$KDSETLED(fd fd_tty, cmd const[KDSETLED], arg intptr)
 ioctl$KDGKBLED(fd fd_tty, cmd const[KDGKBLED], arg ptr[out, int8])
 ioctl$KDSKBLED(fd fd_tty, cmd const[KDSKBLED], arg intptr)
 ioctl$KDGKBTYPE(fd fd_tty, cmd const[KDGKBTYPE], arg ptr[out, int8])
-ioctl$KDADDIO(fd fd_tty, cmd const[KDADDIO], arg intptr)
+ioctl$KDADDIO(fd fd_tty, cmd const[KDADDIO], arg intptr[GPFIRST:GPLAST])
 ioctl$KDDELIO(fd fd_tty, cmd const[KDDELIO], arg intptr)
 ioctl$KDENABIO(fd fd_tty, cmd const[KDENABIO])
 ioctl$KDDISABIO(fd fd_tty, cmd const[KDDISABIO])
 ioctl$KDSETMODE(fd fd_tty, cmd const[KDSETMODE], arg intptr[KD_TEXT:KD_GRAPHICS])
 ioctl$KDGETMODE(fd fd_tty, cmd const[KDGETMODE], arg ptr[out, intptr])
 ioctl$KDMKTONE(fd fd_tty, cmd const[KDMKTONE], arg intptr)
+ioctl$KDKBDREP(fd fd_tty, cmd const[KDKBDREP], arg intptr)
 ioctl$KIOCSOUND(fd fd_tty, cmd const[KIOCSOUND], arg intptr)
 ioctl$GIO_CMAP(fd fd_tty, cmd const[GIO_CMAP], arg ptr[out, io_cmap])
 ioctl$PIO_CMAP(fd fd_tty, cmd const[PIO_CMAP], arg ptr[in, io_cmap])
@@ -108,7 +109,6 @@ ioctl$KDGKBENT(fd fd_tty, cmd const[KDGKBENT], arg ptr[in, kbentry])
 ioctl$KDSKBENT(fd fd_tty, cmd const[KDSKBENT], arg ptr[in, kbentry])
 ioctl$KDGKBSENT(fd fd_tty, cmd const[KDGKBSENT], arg ptr[in, kbsentry])
 ioctl$KDSKBSENT(fd fd_tty, cmd const[KDSKBSENT], arg ptr[in, kbsentry])
-ioctl$KDGKBDIACR(fd fd_tty, cmd const[KDGKBDIACR], arg buffer[out])
 ioctl$KDGETKEYCODE(fd fd_tty, cmd const[KDGETKEYCODE], arg ptr[in, kbkeycode])
 ioctl$KDSETKEYCODE(fd fd_tty, cmd const[KDSETKEYCODE], arg ptr[in, kbkeycode])
 ioctl$KDSIGACCEPT(fd fd_tty, cmd const[KDSIGACCEPT], arg signalnoptr)
@@ -122,6 +122,39 @@ ioctl$VT_WAITACTIVE(fd fd_tty, cmd const[VT_WAITACTIVE])
 ioctl$VT_DISALLOCATE(fd fd_tty, cmd const[VT_DISALLOCATE])
 ioctl$VT_RESIZE(fd fd_tty, cmd const[VT_RESIZE], arg ptr[in, vt_sizes])
 ioctl$VT_RESIZEX(fd fd_tty, cmd const[VT_RESIZEX], arg ptr[in, vt_consize])
+
+ioctl$VT_LOCKSWITCH(fd fd_tty, cmd const[VT_LOCKSWITCH], arg intptr)
+ioctl$VT_UNLOCKSWITCH(fd fd_tty, cmd const[VT_UNLOCKSWITCH], arg intptr)
+ioctl$VT_GETHIFONTMASK(fd fd_tty, cmd const[VT_GETHIFONTMASK], arg intptr)
+#ioctl$KDUNMAPDISP(fd fd_tty,  nop
+#ioctl$KDMAPDISP(fd fd_tty,  nop
+
+ioctl$KDGKBDIACR(fd fd_tty, cmd const[KDGKBDIACR], arg ptr[out, kbdiacrs])
+ioctl$KDGKBDIACRUC(fd fd_tty, cmd const[KDGKBDIACRUC], arg ptr[out, kbdiacrsuc])
+ioctl$KDSKBDIACR(fd fd_tty, cmd const[KDSKBDIACR], arg ptr[in, kbdiacrs])
+ioctl$KDSKBDIACRUC(fd fd_tty, cmd const[KDSKBDIACRUC], arg ptr[in, kbdiacrsuc])
+
+kbdiacr {
+	diacr		int32
+	base		int32
+	result		int32
+}
+
+kbdiacrs {
+	kb_cnt		int32
+	kbdiacr		array[kbdiacr, 256]
+}
+
+kbdiacruc {
+	diacr		int32
+	base		int32
+	result		int32
+}
+
+kbdiacrsuc {
+	kb_cnt		int32
+	kbdiacruc	array[kbdiacruc, 256]
+}
 
 # For the TIOCLINUX ioctl, see console_ioctl(4).
 ioctl$TIOCL_SETSEL(fd fd_tty, cmd const[TIOCLINUX], arg ptr[in, tiocl_selection_arg])
