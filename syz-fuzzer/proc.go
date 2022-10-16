@@ -351,7 +351,6 @@ func (proc *Proc) executeRaw(opts *ipc.ExecOpts, p *prog.Prog, stat Stat) *ipc.P
 		atomic.AddUint64(&proc.fuzzer.stats[StatShouldExecute], 1)
 	} else {
 		atomic.AddUint64(&proc.fuzzer.stats[StatShouldNotExecute], 1)
-		log.Logf(1, "AAAA skipping execute, !p.ShouldExecuteProg()")
 		return nil
 	}
 
