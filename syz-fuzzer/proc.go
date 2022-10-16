@@ -221,11 +221,18 @@ func (proc *Proc) smashInput(item *WorkSmash) {
 		proc.executeHintSeed(item.p, item.call)
 	}
 	fuzzerSnapshot := proc.fuzzer.snapshot()
-	for i := 0; i < 400; i++ {
+	for i := 0; i < 100; i++ {
 		p := item.p.Clone()
 		p.MutateThreadSchedule(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
 		log.Logf(1, "#%v: smash mutated thread-schedule", proc.pid)
-		proc.executeAndCollide(proc.execOpts, p, ProgNormal, StatSmashThreadSchedule)
+		proc.execute(proc.execOpts, p, ProgNormal, StatSmashThreadSchedule)
+	}
+
+	for i := 0; i < 300; i++ {
+		p := item.p.Clone()
+		p.RandomizeThreadSchedule(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
+		log.Logf(1, "#%v: smash mutated thread-schedule-random", proc.pid)
+		proc.execute(proc.execOpts, p, ProgNormal, StatSmashThreadSchedule)
 	}
 
 	for i := 0; i < 100; i++ {
@@ -296,6 +303,21 @@ func (proc *Proc) enqueueCallTriage(p *prog.Prog, flags ProgTypes, callIndex int
 
 func (proc *Proc) executeAndCollide(execOpts *ipc.ExecOpts, p *prog.Prog, flags ProgTypes, stat Stat) {
 	proc.execute(execOpts, p, flags, stat)
+
+	fuzzerSnapshot := proc.fuzzer.snapshot()
+	for i := 0; i < 3; i++ {
+		p := p.Clone()
+		p.MutateThreadSchedule(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
+		log.Logf(1, "#%v: exec mutated thread-schedule", proc.pid)
+		proc.execute(proc.execOpts, p, ProgNormal, StatRandomThread)
+	}
+
+	for i := 0; i < 7; i++ {
+		p := p.Clone()
+		p.RandomizeThreadSchedule(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
+		log.Logf(1, "#%v: exec mutated thread-schedule-random", proc.pid)
+		proc.execute(proc.execOpts, p, ProgNormal, StatRandomThread)
+	}
 
 	if proc.execOptsCollide.Flags&ipc.FlagThreaded == 0 {
 		// We cannot collide syscalls without being in the threaded mode.

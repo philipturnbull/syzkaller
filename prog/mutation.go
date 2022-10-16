@@ -14,6 +14,31 @@ import (
 // Maximum length of generated binary blobs inserted into the program.
 const maxBlobLen = uint64(100 << 10)
 
+func (p *Prog) RandomizeThreadSchedule(rs rand.Source, ncalls int, ct *ChoiceTable, noMutate map[int]bool, corpus []*Prog) {
+	r := newRand(p.Target, rs)
+	if ncalls < len(p.Calls) {
+		ncalls = len(p.Calls)
+	}
+
+	newTS := []int{}
+	newLength := len(p.ThreadSchedule)
+	if newLength < 64 {
+		newLength = 64
+	}
+
+	for i := 0; i < newLength; i++ {
+		newTS = append(newTS, (int)(r.randInt(32) % 2))
+	}
+
+	p.ThreadSchedule = newTS
+
+	p.sanitizeFix()
+	p.debugValidate()
+	if got := len(p.Calls); got < 1 || got > ncalls {
+		panic(fmt.Sprintf("bad number of calls after mutation: %v, want [1, %v]", got, ncalls))
+	}
+}
+
 func (p *Prog) MutateThreadSchedule(rs rand.Source, ncalls int, ct *ChoiceTable, noMutate map[int]bool, corpus []*Prog) {
 	r := newRand(p.Target, rs)
 	if ncalls < len(p.Calls) {

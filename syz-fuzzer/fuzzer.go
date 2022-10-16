@@ -87,6 +87,7 @@ const (
 	StatHint
 	StatSeed
 	StatCollide
+	StatRandomThread
 	StatBufferTooSmall
 	StatShouldExecute
 	StatShouldNotExecute
@@ -104,6 +105,7 @@ var statNames = [StatCount]string{
 	StatHint:           "exec hints",
 	StatSeed:           "exec seeds",
 	StatCollide:        "exec collide",
+	StatRandomThread:        "exec random thread",
 	StatBufferTooSmall: "buffer too small",
 	StatShouldExecute: "should execute",
 	StatShouldNotExecute: "should not execute",
