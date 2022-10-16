@@ -14,7 +14,7 @@
                 "cpu": 2,
                 "mem": 2048
         },
-        "sandbox": "setuid",
+        "sandbox": "namespace",
         "fuzzing_vms": $NUM_FUZZING_VMS,
         "enable_syscalls": [ $SYSCALLS ],
         "disable_syscalls": [
