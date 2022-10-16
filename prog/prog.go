@@ -532,7 +532,6 @@ func (p *Prog) AssignThreads() {
 //	}
 }
 
-/*
 func argUsesResultArg(needle *ResultArg, haystack *Arg) bool {
 	switch arg := haystack.(type) {
 	case *PointerArg:
@@ -554,6 +553,7 @@ func argUsesResultArg(needle *ResultArg, haystack *Arg) bool {
 	}
 }
 
+/*
 func threadNUsesResultArg(needle *ResultArg, n int) bool {
 	//log.Logf(1, "\nAAAA looking for needle=%T/%#v in thread=%d\n", needle, needle, n)
 
@@ -570,7 +570,6 @@ func threadNUsesResultArg(needle *ResultArg, n int) bool {
 
 	return false
 }
-*/
 
 func argUsesResultArg(arg Arg) bool {
 	//log.Logf(1, "AAAA argUsesResultArg: %T -> %#v\n", arg, arg)
@@ -593,11 +592,11 @@ func argUsesResultArg(arg Arg) bool {
 		return false
 	}
 }
+*/
 
 type resultUsage struct {
 	Usage []int
 }
-
 func findOverlap(overlaps map[Arg]resultUsage, thread int, arg Arg) {
 	switch arg := arg.(type) {
 	case *PointerArg:
@@ -623,16 +622,6 @@ func findOverlap(overlaps map[Arg]resultUsage, thread int, arg Arg) {
 	}
 }
 
-func callUsesAnyResultArg(c Call) bool {
-	for _, arg := range c.Args {
-		if argUsesResultArg(arg) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (p *Prog) ShouldExecuteProg() bool {
 	if !p.HasAllThreads() {
 		return false
@@ -643,13 +632,7 @@ func (p *Prog) ShouldExecuteProg() bool {
 	for _, call := range p.Calls {
 		ti := call.Props.ThreadIndex
 
-		//log.Logf(1, "AAAA ti=%d call=%#v\n", ti, call)
-
 		if ti == 0 {
-			if call.Ret == nil && !callUsesAnyResultArg(call) {
-				/* All syscalls on the parent thread must allocate a resource or use a resource*/
-				return false
-			}
 		} else {
 			foundReturnArg := false
 			for _, arg := range call.Args {
@@ -663,24 +646,10 @@ func (p *Prog) ShouldExecuteProg() bool {
 			if !foundReturnArg {
 				return false
 			}
-
-/*
-			if !threadNUsesResultArg(call.Ret, 1) {
-				return false
-			}
-
-			if !threadNUsesResultArg(call.Ret, 2) {
-				return false
-			}
-*/
 		}
 	}
 
-	//log.Logf(1, "AAAA overlaps=%#v\n", overlaps)
-
 	for _, usage := range overlaps {
-		//log.Logf(1, "AAAA arg=%#v\n", arg)
-		//log.Logf(1, "AAAA usage=%#v\n", usage)
 		if usage.Usage[1] > 0 && usage.Usage[2] > 0 {
 			return true
 		}
