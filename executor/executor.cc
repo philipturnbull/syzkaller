@@ -213,6 +213,7 @@ struct thread_call_t {
 static thread_call_t thread_calls[kMaxThreads + 1];
 const uint64_t kMaxThreadIndexes = 4096;
 #define PR_SET_FUZZ_PARENT 65
+#define PR_GET_FUZZ_LOCK_ACTIONS 66
 static uint64_t thread_schedule_length;
 static unsigned char thread_schedule[kMaxThreadIndexes];
 
@@ -992,6 +993,7 @@ void *child_execute(void *thread_call_)
 	return NULL;
 }
 
+void write_lock_actions();
 cover_t parent_thread_coverage;
 void execute_one()
 {
@@ -1053,6 +1055,7 @@ void execute_one()
 #endif
 
 	write_extra_output();
+	write_lock_actions();
 }
 
 // execute_one executes program stored in input_data.
@@ -1308,6 +1311,7 @@ thread_t* schedule_call(int call_index, int call_num, uint64 copyout_index, uint
 	return th;
 }
 
+uint32 lock_log_seed;
 #if SYZ_EXECUTOR_USES_SHMEM
 template <typename cover_data_t>
 void write_coverage_signal(cover_t* cov, uint32* signal_count_pos, uint32* cover_count_pos)
@@ -1333,6 +1337,7 @@ void write_coverage_signal(cover_t* cov, uint32* signal_count_pos, uint32* cover
 			if (ignore || dedup(sig))
 				continue;
 			write_output(sig);
+			lock_log_seed ^= sig;
 			nsig++;
 		}
 		// Write out number of signals.
@@ -1514,6 +1519,77 @@ void write_extra_output()
 	completed++;
 	write_completed(completed);
 #endif
+}
+
+struct lock_action {
+	uint64_t id;
+	size_t thread_index;
+	uint8_t locked;
+	uint8_t lock_type;
+	uint8_t static_lock;
+};
+struct lock_action lock_actions[0x8000];
+
+struct canon_lock_id {
+	uint64_t id;
+};
+struct canon_lock_id canon_lock_ids[0x8000];
+size_t num_canon_lock_ids;
+
+uint32_t canon_lock_id_for(uint64_t id) {
+	for (uint32_t i = 0; i < num_canon_lock_ids; i++) {
+		if (canon_lock_ids[i].id == id) {
+			return i;
+		}
+	}
+
+	canon_lock_ids[num_canon_lock_ids++].id = id;
+	return num_canon_lock_ids - 1;
+}
+
+void write_lock_actions()
+{
+	int num_lock_actions = prctl(PR_GET_FUZZ_LOCK_ACTIONS, &lock_actions[0], sizeof(lock_actions));
+	// debug("%s: num_lock_actions=%d\n", __func__, num_lock_actions);
+	if (num_lock_actions) {
+		write_output(kOutMagic);
+		write_output(-1); // call index
+		write_output(-1); // call num
+		write_output(999); // errno
+		write_output(0); // call flags
+		uint32* signal_count_pos = write_output(0); // filled in later
+		write_output(0); // cover_count_pos
+		write_output(0); // comps_count_pos
+
+		// debug("%s: lock_log_seed=%08x\n", __func__, lock_log_seed);
+
+		uint32_t prev_signal = lock_log_seed;
+		for (int i = 0; i < num_lock_actions; i++) {
+			struct lock_action *action = &lock_actions[i];
+			uint64_t lock_id = action->id;
+			if (!action->static_lock)
+				lock_id = canon_lock_id_for(lock_id);
+
+			// debug("  lock_actions[%d] = { id=%p, thread_index=%ld, locked=%d, lock_type=%d, lock_id=%p}\n", i, (void *)action->id, action->thread_index, action->locked, action->lock_type, (void *)lock_id);
+
+			uint32_t sig = 0;
+			sig ^= hash((lock_id >>  0) & 0xffffffff);
+			sig ^= hash((lock_id >> 32) & 0xffffffff);
+			sig ^= hash(((action->locked ? 1 : 0) << 16) | (action->thread_index << 8) | action->lock_type);
+
+			sig ^= hash(prev_signal);
+
+			// debug("    hashed = %08x\n", sig);
+			prev_signal = sig;
+			write_output(sig);
+		}
+
+		*signal_count_pos = num_lock_actions;
+
+		completed++;
+		write_completed(completed);
+		//debug("%s: AAAA %08x\n", __func__, prev_signal);
+	}
 }
 
 void thread_create(thread_t* th, int id, bool need_coverage)
