@@ -1341,6 +1341,13 @@ void write_coverage_signal(cover_t* cov, uint32* signal_count_pos, uint32* cover
 	}
 
 	if (flag_collect_cover) {
+		{
+			uint32 cover_size = cov->size;
+			for (uint32 i = 0; i < cover_size; i++) {
+				debug("pc=%p\n", (void *)(uint64)cover_data[i]);
+			}
+		}
+
 		// Write out real coverage (basic block PCs).
 		uint32 cover_size = cov->size;
 		if (flag_dedup_cover) {
@@ -1545,9 +1552,11 @@ uint32_t canon_lock_id_for(uint64_t id) {
 
 void write_lock_actions()
 {
-	int num_lock_actions = prctl(PR_GET_FUZZ_LOCK_ACTIONS, &lock_actions[0], sizeof(lock_actions));
+	unsigned long num_schedule_calls = 0;
+	int num_lock_actions = prctl(PR_GET_FUZZ_LOCK_ACTIONS, &lock_actions[0], sizeof(lock_actions), &num_schedule_calls);
 	if (num_lock_actions < 0)
 		fail("prctl(PR_GET_FUZZ_LOCK_ACTIONS) failed");
+	debug("%s: num_schedule_calls=%ld\n", __func__, num_schedule_calls);
 	debug("%s: num_lock_actions=%d\n", __func__, num_lock_actions);
 	if (num_lock_actions) {
 		write_output(kOutMagic);
