@@ -532,6 +532,7 @@ func (p *Prog) AssignThreads() {
 //	}
 }
 
+/*
 func argUsesResultArg(needle *ResultArg, haystack *Arg) bool {
 	switch arg := haystack.(type) {
 	case *PointerArg:
@@ -553,7 +554,6 @@ func argUsesResultArg(needle *ResultArg, haystack *Arg) bool {
 	}
 }
 
-/*
 func threadNUsesResultArg(needle *ResultArg, n int) bool {
 	//log.Logf(1, "\nAAAA looking for needle=%T/%#v in thread=%d\n", needle, needle, n)
 
@@ -570,7 +570,7 @@ func threadNUsesResultArg(needle *ResultArg, n int) bool {
 
 	return false
 }
-
+*/
 func argUsesResultArg(arg Arg) bool {
 	//log.Logf(1, "AAAA argUsesResultArg: %T -> %#v\n", arg, arg)
 	switch arg := arg.(type) {
@@ -592,7 +592,6 @@ func argUsesResultArg(arg Arg) bool {
 		return false
 	}
 }
-*/
 
 type resultUsage struct {
 	Usage []int

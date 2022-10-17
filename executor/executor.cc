@@ -1550,7 +1550,9 @@ uint32_t canon_lock_id_for(uint64_t id) {
 void write_lock_actions()
 {
 	int num_lock_actions = prctl(PR_GET_FUZZ_LOCK_ACTIONS, &lock_actions[0], sizeof(lock_actions));
-	// debug("%s: num_lock_actions=%d\n", __func__, num_lock_actions);
+	if (num_lock_actions < 0)
+		fail("prctl(PR_GET_FUZZ_LOCK_ACTIONS) failed");
+	debug("%s: num_lock_actions=%d\n", __func__, num_lock_actions);
 	if (num_lock_actions) {
 		write_output(kOutMagic);
 		write_output(-1); // call index
@@ -1561,7 +1563,7 @@ void write_lock_actions()
 		write_output(0); // cover_count_pos
 		write_output(0); // comps_count_pos
 
-		// debug("%s: lock_log_seed=%08x\n", __func__, lock_log_seed);
+		debug("%s: lock_log_seed=%08x\n", __func__, lock_log_seed);
 
 		uint32_t prev_signal = lock_log_seed;
 		for (int i = 0; i < num_lock_actions; i++) {
@@ -1570,7 +1572,7 @@ void write_lock_actions()
 			if (!action->static_lock)
 				lock_id = canon_lock_id_for(lock_id);
 
-			// debug("  lock_actions[%d] = { id=%p, thread_index=%ld, locked=%d, lock_type=%d, lock_id=%p}\n", i, (void *)action->id, action->thread_index, action->locked, action->lock_type, (void *)lock_id);
+			debug("  lock_actions[%d] = { id=%p, thread_index=%ld, locked=%d, lock_type=%d, lock_id=%p}\n", i, (void *)action->id, action->thread_index, action->locked, action->lock_type, (void *)lock_id);
 
 			uint32_t sig = 0;
 			sig ^= hash((lock_id >>  0) & 0xffffffff);
@@ -1579,7 +1581,7 @@ void write_lock_actions()
 
 			sig ^= hash(prev_signal);
 
-			// debug("    hashed = %08x\n", sig);
+			debug("    hashed = %08x\n", sig);
 			prev_signal = sig;
 			write_output(sig);
 		}
@@ -1588,7 +1590,7 @@ void write_lock_actions()
 
 		completed++;
 		write_completed(completed);
-		//debug("%s: AAAA %08x\n", __func__, prev_signal);
+		debug("%s: AAAA %08x\n", __func__, prev_signal);
 	}
 }
 
