@@ -635,7 +635,7 @@ func findOverlap(overlaps map[Arg]resultUsage, thread int, arg Arg) {
 		panic(fmt.Sprintf("unknown type: %T\n", arg))
 	}
 }
-
+/*
 func (p *Prog) ShouldExecuteProg() bool {
 	if !p.HasAllThreads() {
 		return false
@@ -671,7 +671,7 @@ func (p *Prog) ShouldExecuteProg() bool {
 
 	return false
 }
-
+*/
 func (p *Prog) sanitizeFix() {
 	if err := p.sanitize(true); err != nil {
 		panic(err)
