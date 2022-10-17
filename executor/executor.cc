@@ -1311,7 +1311,6 @@ thread_t* schedule_call(int call_index, int call_num, uint64 copyout_index, uint
 	return th;
 }
 
-uint32 lock_log_seed;
 #if SYZ_EXECUTOR_USES_SHMEM
 template <typename cover_data_t>
 void write_coverage_signal(cover_t* cov, uint32* signal_count_pos, uint32* cover_count_pos)
@@ -1337,7 +1336,6 @@ void write_coverage_signal(cover_t* cov, uint32* signal_count_pos, uint32* cover
 			if (ignore || dedup(sig))
 				continue;
 			write_output(sig);
-			lock_log_seed ^= sig;
 			nsig++;
 		}
 		// Write out number of signals.
@@ -1563,9 +1561,7 @@ void write_lock_actions()
 		write_output(0); // cover_count_pos
 		write_output(0); // comps_count_pos
 
-		debug("%s: lock_log_seed=%08x\n", __func__, lock_log_seed);
-
-		uint32_t prev_signal = lock_log_seed;
+		uint32_t prev_signal = 0;
 		for (int i = 0; i < num_lock_actions; i++) {
 			struct lock_action *action = &lock_actions[i];
 			uint64_t lock_id = action->id;
