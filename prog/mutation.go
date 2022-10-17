@@ -22,8 +22,8 @@ func (p *Prog) RandomizeThreadSchedule(rs rand.Source, ncalls int, ct *ChoiceTab
 
 	newTS := []int{}
 	newLength := len(p.ThreadSchedule)
-	if newLength < 64 {
-		newLength = 64
+	if newLength < 256 {
+		newLength = 256
 	}
 
 	for i := 0; i < newLength; i++ {
