@@ -1043,8 +1043,6 @@ void execute_one()
 		thread_start(child_execute, thread_call);
 	}
 
-	usleep(100);
-
 	for (int i = 0; i < kMaxThreads; i++) {
 		thread_call_t *thread_call = &thread_calls[i + 1];
 		pthread_join(thread_call->th, NULL);
