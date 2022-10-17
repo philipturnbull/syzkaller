@@ -572,10 +572,18 @@ func threadNUsesResultArg(needle *ResultArg, n int) bool {
 }
 */
 func argUsesResultArg(arg Arg) bool {
+	if arg == nil {
+		return false
+	}
+
 	//log.Logf(1, "AAAA argUsesResultArg: %T -> %#v\n", arg, arg)
 	switch arg := arg.(type) {
+	case *ConstArg:
+		return false
 	case *PointerArg:
 		return argUsesResultArg(arg.Res)
+	case *DataArg:
+		return false
 	case *GroupArg:
 		for _, garg := range arg.Inner {
 			if argUsesResultArg(garg) {
@@ -589,7 +597,7 @@ func argUsesResultArg(arg Arg) bool {
 	case *ResultArg:
 		return arg.Res != nil
 	default:
-		return false
+		panic(fmt.Sprintf("unknown type: %T\n", arg))
 	}
 }
 
@@ -597,9 +605,15 @@ type resultUsage struct {
 	Usage []int
 }
 func findOverlap(overlaps map[Arg]resultUsage, thread int, arg Arg) {
+	if arg == nil {
+		return
+	}
+
 	switch arg := arg.(type) {
+	case *ConstArg:
 	case *PointerArg:
 		findOverlap(overlaps, thread, arg.Res)
+	case *DataArg:
 	case *GroupArg:
 		for _, garg := range arg.Inner {
 			findOverlap(overlaps, thread, garg)
@@ -618,6 +632,7 @@ func findOverlap(overlaps map[Arg]resultUsage, thread int, arg Arg) {
 			}
 		}
 	default:
+		panic(fmt.Sprintf("unknown type: %T\n", arg))
 	}
 }
 
