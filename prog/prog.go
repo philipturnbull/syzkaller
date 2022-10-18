@@ -684,23 +684,6 @@ func (p *Prog) sanitize(fix bool) error {
 			return err
 		}
 	}
-
-	for _, call := range p.Calls {
-		if call.Props.ThreadIndex != 0 {
-			foundReturnArg := false
-			for _, arg := range call.Args {
-				if argUsesResultArg(arg) {
-					foundReturnArg = true
-				}
-			}
-
-			if !foundReturnArg {
-				call.Props.ThreadIndex = 0
-				//log.Logf(0, "sanitize: forced call %d to main thread\n", call_index)
-			}
-		}
-	}
-
 	return nil
 }
 
