@@ -635,15 +635,15 @@ func findOverlap(overlaps map[Arg]resultUsage, thread int, arg Arg) {
 		panic(fmt.Sprintf("unknown type: %T\n", arg))
 	}
 }
-/*
-func (p *Prog) ShouldExecuteProg() bool {
+
+func (p *Prog) ShouldExecuteProg() (bool, string) {
 	if !p.HasAllThreads() {
-		return false
+		return false, "!p.HasAllThreads()"
 	}
 
 	overlaps := make(map[Arg]resultUsage)
 
-	for _, call := range p.Calls {
+	for call_index, call := range p.Calls {
 		ti := call.Props.ThreadIndex
 
 		if ti == 0 {
@@ -658,20 +658,20 @@ func (p *Prog) ShouldExecuteProg() bool {
 			}
 
 			if !foundReturnArg {
-				return false
+				return false, fmt.Sprintf("!foundReturnArg, ti=%d, call_index=%d", ti, call_index)
 			}
 		}
 	}
 
-	for _, usage := range overlaps {
+	for arg, usage := range overlaps {
 		if usage.Usage[1] > 0 && usage.Usage[2] > 0 {
-			return true
+			return true, fmt.Sprintf("found overlap for %#v", arg)
 		}
 	}
 
-	return false
+	return false, "no overlaps"
 }
-*/
+
 func (p *Prog) sanitizeFix() {
 	if err := p.sanitize(true); err != nil {
 		panic(err)
@@ -684,6 +684,23 @@ func (p *Prog) sanitize(fix bool) error {
 			return err
 		}
 	}
+
+	for _, call := range p.Calls {
+		if call.Props.ThreadIndex != 0 {
+			foundReturnArg := false
+			for _, arg := range call.Args {
+				if argUsesResultArg(arg) {
+					foundReturnArg = true
+				}
+			}
+
+			if !foundReturnArg {
+				call.Props.ThreadIndex = 0
+				//log.Logf(0, "sanitize: forced call %d to main thread\n", call_index)
+			}
+		}
+	}
+
 	return nil
 }
 
