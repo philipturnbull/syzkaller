@@ -1529,7 +1529,6 @@ struct lock_action {
 	size_t thread_index;
 	uint8_t locked;
 	uint8_t lock_type;
-	uint8_t static_lock;
 };
 struct lock_action lock_actions[0x8000];
 
@@ -1550,14 +1549,38 @@ uint32_t canon_lock_id_for(uint64_t id) {
 	return num_canon_lock_ids - 1;
 }
 
+unsigned long trim_trailing_logs(unsigned long num_lock_actions)
+{
+	if (num_lock_actions == 0)
+		return 0;
+
+	if (num_lock_actions == 1)
+		return 0;
+
+	uint64_t last_thread_index = lock_actions[num_lock_actions - 1].thread_index;
+	while (num_lock_actions > 0 && lock_actions[num_lock_actions - 1].thread_index == last_thread_index)
+		num_lock_actions--;
+
+	if (num_lock_actions == 0)
+		return num_lock_actions;
+
+	return num_lock_actions + 1;
+}
+
 void write_lock_actions()
 {
+	if (!flag_collect_signal)
+		return;
+
 	unsigned long num_schedule_calls = 0;
 	int num_lock_actions = prctl(PR_GET_FUZZ_LOCK_ACTIONS, &lock_actions[0], sizeof(lock_actions), &num_schedule_calls);
 	if (num_lock_actions < 0)
 		fail("prctl(PR_GET_FUZZ_LOCK_ACTIONS) failed");
 	debug("%s: num_schedule_calls=%ld\n", __func__, num_schedule_calls);
 	debug("%s: num_lock_actions=%d\n", __func__, num_lock_actions);
+
+	num_lock_actions = trim_trailing_logs(num_lock_actions);
+
 	if (num_lock_actions) {
 		write_output(kOutMagic);
 		write_output(-1); // call index
@@ -1571,9 +1594,7 @@ void write_lock_actions()
 		uint32_t prev_signal = 0;
 		for (int i = 0; i < num_lock_actions; i++) {
 			struct lock_action *action = &lock_actions[i];
-			uint64_t lock_id = action->id;
-			if (!action->static_lock)
-				lock_id = canon_lock_id_for(lock_id);
+			uint64_t lock_id = canon_lock_id_for(action->id);
 
 			debug("  lock_actions[%d] = { id=%p, thread_index=%ld, locked=%d, lock_type=%d, lock_id=%p}\n", i, (void *)action->id, action->thread_index, action->locked, action->lock_type, (void *)lock_id);
 
