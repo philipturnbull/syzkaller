@@ -1614,7 +1614,7 @@ void write_lock_actions()
 
 		completed++;
 		write_completed(completed);
-		debug("%s: AAAA %08x\n", __func__, prev_signal);
+		debug("%s: AAAA %08x\n\n", __func__, prev_signal);
 	}
 }
 
