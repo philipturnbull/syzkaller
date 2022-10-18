@@ -67,7 +67,7 @@ func Minimize(p0 *Prog, callIndex0 int, crash bool, pred0 func(*Prog, int) bool)
 }
 
 func removeCalls(p0 *Prog, callIndex0 int, crash bool, pred func(*Prog, int) bool) (*Prog, int) {
-	for i := len(p0.Calls) - 1; len(p0.Calls) > RecommendedCalls && i >= 0; i-- {
+	for i := len(p0.Calls) - 1; i >= 0; i-- {
 		if i == callIndex0 {
 			continue
 		}
