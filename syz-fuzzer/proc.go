@@ -347,13 +347,13 @@ func (proc *Proc) randomCollide(origP *prog.Prog) *prog.Prog {
 func (proc *Proc) executeRaw(opts *ipc.ExecOpts, p *prog.Prog, stat Stat) *ipc.ProgInfo {
 	proc.fuzzer.checkDisabledCalls(p)
 
-	atomic.AddUint64(&proc.fuzzer.stats[StatShouldExecute], 1)
-//	if p.ShouldExecuteProg() {
-//		atomic.AddUint64(&proc.fuzzer.stats[StatShouldExecute], 1)
-//	} else {
-//		atomic.AddUint64(&proc.fuzzer.stats[StatShouldNotExecute], 1)
-//		return nil
-//	}
+	should_execute, _ := p.ShouldExecuteProg()
+	if should_execute {
+		atomic.AddUint64(&proc.fuzzer.stats[StatShouldExecute], 1)
+	} else {
+		atomic.AddUint64(&proc.fuzzer.stats[StatShouldNotExecute], 1)
+		return nil
+	}
 
 	// Limit concurrency window and do leak checking once in a while.
 	ticket := proc.fuzzer.gate.Enter()
