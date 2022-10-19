@@ -20,6 +20,7 @@
 #endif
 
 #include "defs.h"
+#include "../../linux/kernel/sched/fuzz_sched.h"
 
 #if defined(__GNUC__)
 #define SYSCALLAPI
@@ -214,6 +215,7 @@ static thread_call_t thread_calls[kMaxThreads + 1];
 const uint64_t kMaxThreadIndexes = 4096;
 #define PR_SET_FUZZ_PARENT 65
 #define PR_GET_FUZZ_LOCK_ACTIONS 66
+#define PR_GET_FUZZ_OBJECT_OVERLAPS 67
 static uint64_t thread_schedule_length;
 static unsigned char thread_schedule[kMaxThreadIndexes];
 
@@ -994,6 +996,7 @@ void *child_execute(void *thread_call_)
 }
 
 void write_lock_actions();
+void write_object_overlaps();
 cover_t parent_thread_coverage;
 void execute_one()
 {
@@ -1053,7 +1056,8 @@ void execute_one()
 #endif
 
 	write_extra_output();
-	write_lock_actions();
+	//write_lock_actions();
+	write_object_overlaps();
 }
 
 // execute_one executes program stored in input_data.
@@ -1523,19 +1527,20 @@ void write_extra_output()
 	write_completed(completed);
 #endif
 }
-
+/*
 struct lock_action {
 	uint64_t id;
 	size_t thread_index;
 	uint8_t locked;
 	uint8_t lock_type;
 };
-struct lock_action lock_actions[0x8000];
+*/
+struct lock_action lock_actions[MAX_NUM_LOCK_ACTIONS];
 
 struct canon_lock_id {
 	uint64_t id;
 };
-struct canon_lock_id canon_lock_ids[0x8000];
+struct canon_lock_id canon_lock_ids[MAX_NUM_LOCK_ACTIONS];
 size_t num_canon_lock_ids;
 
 uint32_t canon_lock_id_for(uint64_t id) {
@@ -1615,6 +1620,40 @@ void write_lock_actions()
 		completed++;
 		write_completed(completed);
 		debug("%s: AAAA %08x\n\n", __func__, prev_signal);
+	}
+}
+struct object_overlap object_overlaps[MAX_NUM_OBJECT_OVERLAPS];
+void write_object_overlaps()
+{
+	if (!flag_collect_signal)
+		return;
+
+	int num_object_overlaps = prctl(PR_GET_FUZZ_OBJECT_OVERLAPS, &object_overlaps[0], sizeof(object_overlaps));
+	if (num_object_overlaps < 0)
+		fail("prctl(PR_GET_FUZZ_OBJECT_OVERLAPS) failed");
+
+	debug("%s: num_object_overlaps=%d\n", __func__, num_object_overlaps);
+
+	if (num_object_overlaps) {
+		write_output(kOutMagic);
+		write_output(-1); // call index
+		write_output(-1); // call num
+		write_output(999); // errno
+		write_output(0); // call flags
+		uint32* signal_count_pos = write_output(0); // filled in later
+		write_output(0); // cover_count_pos
+		write_output(0); // comps_count_pos
+
+		for (int i = 0; i < num_object_overlaps; i++) {
+			uint32_t hash = object_overlaps[i].hash;
+			write_output(hash);
+			debug("%s: hash[%d] = 0x%08x\n", __func__, i, hash);
+		}
+
+		*signal_count_pos = num_object_overlaps;
+
+		completed++;
+		write_completed(completed);
 	}
 }
 
