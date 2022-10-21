@@ -1345,7 +1345,7 @@ void write_coverage_signal(cover_t* cov, uint32* signal_count_pos, uint32* cover
 	}
 
 	if (flag_collect_cover) {
-		{
+		if (0) {
 			uint32 cover_size = cov->size;
 			for (uint32 i = 0; i < cover_size; i++) {
 				debug("pc=%p\n", (void *)(uint64)cover_data[i]);
