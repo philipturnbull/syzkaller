@@ -366,6 +366,7 @@ struct call_reply {
 	uint32 reserrno;
 	uint32 flags;
 	uint32 signal_size;
+	uint32 object_signal_size;
 	uint32 cover_size;
 	uint32 comps_size;
 	// signal/cover/comps follow
@@ -1335,6 +1336,7 @@ void write_coverage_signal(cover_t* cov, uint32* signal_count_pos, uint32* cover
 			bool ignore = !filter && !prev_filter;
 			prev_pc = pc;
 			prev_filter = filter;
+
 			if (ignore || dedup(sig))
 				continue;
 			write_output(sig);
@@ -1447,6 +1449,7 @@ void write_call_output(thread_t* th, bool finished)
 	write_output(reserrno);
 	write_output(call_flags);
 	uint32* signal_count_pos = write_output(0); // filled in later
+	write_output(0); // object signal
 	uint32* cover_count_pos = write_output(0); // filled in later
 	uint32* comps_count_pos = write_output(0); // filled in later
 
@@ -1492,6 +1495,7 @@ void write_call_output(thread_t* th, bool finished)
 	reply.reserrno = reserrno;
 	reply.flags = call_flags;
 	reply.signal_size = 0;
+	reply.object_signal_size = 0;
 	reply.cover_size = 0;
 	reply.comps_size = 0;
 	if (write(kOutPipeFd, &reply, sizeof(reply)) != sizeof(reply))
@@ -1515,6 +1519,7 @@ void write_extra_output()
 	write_output(999); // errno
 	write_output(0); // call flags
 	uint32* signal_count_pos = write_output(0); // filled in later
+	write_output(0); // object signal
 	uint32* cover_count_pos = write_output(0); // filled in later
 	write_output(0); // comps_count_pos
 	if (is_kernel_64_bit)
@@ -1592,7 +1597,8 @@ void write_lock_actions()
 		write_output(-1); // call num
 		write_output(999); // errno
 		write_output(0); // call flags
-		uint32* signal_count_pos = write_output(0); // filled in later
+		write_output(0); // signal size
+		uint32* object_signal_count_pos = write_output(0); // filled in later
 		write_output(0); // cover_count_pos
 		write_output(0); // comps_count_pos
 
@@ -1615,7 +1621,7 @@ void write_lock_actions()
 			write_output(sig);
 		}
 
-		*signal_count_pos = num_lock_actions;
+		*object_signal_count_pos = num_lock_actions;
 
 		completed++;
 		write_completed(completed);
@@ -1640,7 +1646,8 @@ void write_object_overlaps()
 		write_output(-1); // call num
 		write_output(999); // errno
 		write_output(0); // call flags
-		uint32* signal_count_pos = write_output(0); // filled in later
+		write_output(0); // signal
+		uint32* object_signal_count_pos = write_output(0); // filled in later
 		write_output(0); // cover_count_pos
 		write_output(0); // comps_count_pos
 
@@ -1650,7 +1657,7 @@ void write_object_overlaps()
 			debug("%s: hash[%d] = 0x%08x\n", __func__, i, hash);
 		}
 
-		*signal_count_pos = num_object_overlaps;
+		*object_signal_count_pos = num_object_overlaps;
 
 		completed++;
 		write_completed(completed);

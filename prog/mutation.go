@@ -66,6 +66,23 @@ func (p *Prog) MutateThreadSchedule(rs rand.Source, ncalls int, ct *ChoiceTable,
 		panic(fmt.Sprintf("bad number of calls after mutation: %v, want [1, %v]", got, ncalls))
 	}
 }
+
+func (p *Prog) MutateLeaves(rs rand.Source, ct *ChoiceTable, noMutate map[int]bool) {
+	r := newRand(p.Target, rs)
+	ctx := &mutator{
+		p:	p,
+		r:	r,
+		ncalls:	0,
+		ct:	ct,
+		noMutate: noMutate,
+		corpus: []*Prog{},
+	}
+}
+
+func (p *Prog) countLeaves() int {
+	for _, c := range p.Calls {
+}
+
 // Mutate program p.
 //
 // p:           The program to mutate.

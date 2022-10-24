@@ -45,6 +45,11 @@ type WorkTriage struct {
 	flags ProgTypes
 }
 
+type ObjectTriage struct {
+	p     *prog.Prog
+	flags ProgTypes
+}
+
 // WorkCandidate are programs from hub.
 // We don't know yet if they are useful for this fuzzer or not.
 // A proc handles them the same way as locally generated/mutated programs.

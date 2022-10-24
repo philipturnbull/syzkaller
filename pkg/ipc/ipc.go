@@ -90,6 +90,7 @@ const (
 type CallInfo struct {
 	Flags  CallFlags
 	Signal []uint32 // feedback signal, filled if FlagSignal is set
+	ObjectSignal []uint32
 	Cover  []uint32 // per-call coverage, filled if FlagSignal is set and cover == true,
 	// if dedup == false, then cov effectively contains a trace, otherwise duplicates are removed
 	Comps prog.CompMap // per-call comparison operands
@@ -366,6 +367,10 @@ func (env *Env) parseOutput(p *prog.Prog, opts *ExecOpts) (*ProgInfo, error) {
 			return nil, fmt.Errorf("call %v/%v/%v: signal overflow: %v/%v",
 				i, reply.index, reply.num, reply.signalSize, len(out))
 		}
+		if inf.ObjectSignal, ok = readUint32Array(&out, reply.objectSignalSize); !ok {
+			return nil, fmt.Errorf("call %v/%v/%v: object signal overflow: %v/%v",
+				i, reply.index, reply.num, reply.objectSignalSize, len(out))
+		}
 		if inf.Cover, ok = readUint32Array(&out, reply.coverSize); !ok {
 			return nil, fmt.Errorf("call %v/%v/%v: cover overflow: %v/%v",
 				i, reply.index, reply.num, reply.coverSize, len(out))
@@ -546,6 +551,7 @@ type callReply struct {
 	errno      uint32
 	flags      uint32 // see CallFlags
 	signalSize uint32
+	objectSignalSize uint32
 	coverSize  uint32
 	compsSize  uint32
 	// signal/cover/comps follow

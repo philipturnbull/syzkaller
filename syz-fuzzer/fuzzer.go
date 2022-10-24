@@ -63,6 +63,7 @@ type Fuzzer struct {
 	corpusSignal signal.Signal // signal of inputs in corpus
 	maxSignal    signal.Signal // max signal ever observed including flakes
 	newSignal    signal.Signal // diff of maxSignal since last sync with master
+	maxObjectSignal signal.Signal
 
 	checkResult *rpctype.CheckArgs
 	logMu       sync.Mutex
@@ -84,6 +85,7 @@ const (
 	StatMinimize
 	StatSmash
 	StatSmashThreadSchedule
+	StatTriageObject
 	StatHint
 	StatSeed
 	StatCollide
@@ -102,6 +104,7 @@ var statNames = [StatCount]string{
 	StatMinimize:       "exec minimize",
 	StatSmash:          "exec smash",
 	StatSmashThreadSchedule: "exec smash thread",
+	StatTriageObject:	"exec triage object",
 	StatHint:           "exec hints",
 	StatSeed:           "exec seeds",
 	StatCollide:        "exec collide",
@@ -605,6 +608,26 @@ func (fuzzer *Fuzzer) checkNewCallSignal(p *prog.Prog, info *ipc.CallInfo, call 
 	fuzzer.signalMu.Lock()
 	fuzzer.maxSignal.Merge(diff)
 	fuzzer.newSignal.Merge(diff)
+	fuzzer.signalMu.Unlock()
+	fuzzer.signalMu.RLock()
+	return true
+}
+
+func (fuzzer *Fuzzer) checkNewObjectSignal(p *prog.Prog, info *ipc.ProgInfo) (extra bool) {
+	fuzzer.signalMu.RLock()
+	defer fuzzer.signalMu.RUnlock()
+	extra = fuzzer.checkNewObjectSignal(p, &info.Extra, -1)
+	return
+}
+
+func (fuzzer *Fuzzer) checkNewObjectSignal(p *prog.Prog, info *ipc.CallInfo, call int) bool {
+	diff := fuzzer.maxObjectSignal.DiffRaw(info.ObjectSignal, signalPrio(p, info, call))
+	if diff.Empty() {
+		return false
+	}
+	fuzzer.signalMu.RUnlock()
+	fuzzer.signalMu.Lock()
+	fuzzer.maxObjectSignal.Merge(diff)
 	fuzzer.signalMu.Unlock()
 	fuzzer.signalMu.RLock()
 	return true

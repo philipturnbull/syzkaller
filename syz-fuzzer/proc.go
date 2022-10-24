@@ -67,21 +67,16 @@ func (proc *Proc) loop() {
 		generatePeriod = 2
 	}
 	for i := 0; ; i++ {
-		log.Logf(1, "AAAA main loop: i=%d\n", i)
-
-		log.Logf(1, "AAAA queue: triageCandidate=%d candidate=%d triage=%d smash=%d\n", len(proc.fuzzer.workQueue.triageCandidate), len(proc.fuzzer.workQueue.candidate), len(proc.fuzzer.workQueue.triage), len(proc.fuzzer.workQueue.smash))
-
 		item := proc.fuzzer.workQueue.dequeue()
 		if item != nil {
 			switch item := item.(type) {
 			case *WorkTriage:
-				log.Logf(1, "AAAA WorkTriage\n")
 				proc.triageInput(item)
+			case *ObjectTriage:
+				proc.triageObject(item)
 			case *WorkCandidate:
-				log.Logf(1, "AAAA WorkCandidate\n")
 				proc.execute(proc.execOpts, item.p, item.flags, StatCandidate)
 			case *WorkSmash:
-				log.Logf(1, "AAAA WorkSmash\n")
 				proc.smashInput(item)
 			default:
 				log.Fatalf("unknown work type: %#v", item)
@@ -190,6 +185,15 @@ func (proc *Proc) triageInput(item *WorkTriage) {
 	}
 }
 
+func (proc *Proc) triageObject(item *ObjectTriage) {
+	log.Logf(1, "#%v: triaging object type=%x", proc.pid, item.flags)
+	for i := 0; i < 100; i++ {
+		p := item.p.Clone()
+		p.MutateThreadSchedule(proc.rnd, proc.fuzzer.choiceTable, proc.fuzzer.noMutate)
+		proc.execute(proc.execOpts, p, ProgNormal, StatTriageObject)
+	}
+}
+
 func reexecutionSuccess(info *ipc.ProgInfo, oldInfo *ipc.CallInfo, call int) bool {
 	if info == nil || len(info.Calls) == 0 {
 		return false
@@ -239,7 +243,7 @@ func (proc *Proc) smashInput(item *WorkSmash) {
 		p := item.p.Clone()
 		p.Mutate(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
 		log.Logf(1, "#%v: smash mutated", proc.pid)
-		proc.executeAndCollide(proc.execOpts, p, ProgNormal, StatSmash)
+		proc.execute(proc.execOpts, p, ProgNormal, StatSmash)
 	}
 }
 
@@ -284,6 +288,12 @@ func (proc *Proc) execute(execOpts *ipc.ExecOpts, p *prog.Prog, flags ProgTypes,
 	if extra {
 		proc.enqueueCallTriage(p, flags, -1, info.Extra)
 	}
+
+	objectExtra := proc.fuzzer.checkNewObjectSignal(p, info)
+	if objectExtra {
+		proc.enqueueObjectTriage(p, flags)
+	}
+
 	return info
 }
 
@@ -297,6 +307,13 @@ func (proc *Proc) enqueueCallTriage(p *prog.Prog, flags ProgTypes, callIndex int
 		p:     p.Clone(),
 		call:  callIndex,
 		info:  info,
+		flags: flags,
+	})
+}
+
+func (proc *Proc) enqueueObjectTriage(p *prog.Prog, flags ProgTypes) {
+	proc.fuzzer.workQueue.enqueue(&ObjectTriage{
+		p:     p.Clone(),
 		flags: flags,
 	})
 }
