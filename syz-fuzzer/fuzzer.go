@@ -86,6 +86,8 @@ const (
 	StatSmash
 	StatSmashThreadSchedule
 	StatTriageObject
+	StatEnqueueObjectTriage
+	StatDuplicateTriageObject
 	StatHint
 	StatSeed
 	StatCollide
@@ -105,6 +107,8 @@ var statNames = [StatCount]string{
 	StatSmash:          "exec smash",
 	StatSmashThreadSchedule: "exec smash thread",
 	StatTriageObject:	"exec triage object",
+	StatEnqueueObjectTriage: "enqueue object triage",
+	StatDuplicateTriageObject: "duplicate object triage",
 	StatHint:           "exec hints",
 	StatSeed:           "exec seeds",
 	StatCollide:        "exec collide",
@@ -444,6 +448,7 @@ func (fuzzer *Fuzzer) poll(needCandidates bool, stats map[string]uint64) bool {
 		fuzzer.addInputFromAnotherFuzzer(inp)
 	}
 	for _, candidate := range r.Candidates {
+		log.Logf(0, "adding candidate:\n%s\n", string(candidate.Prog))
 		fuzzer.addCandidateInput(candidate)
 	}
 	if needCandidates && len(r.Candidates) == 0 && atomic.LoadUint32(&fuzzer.triagedCandidates) == 0 {
@@ -616,12 +621,14 @@ func (fuzzer *Fuzzer) checkNewCallSignal(p *prog.Prog, info *ipc.CallInfo, call 
 func (fuzzer *Fuzzer) checkNewObjectSignal(p *prog.Prog, info *ipc.ProgInfo) (extra bool) {
 	fuzzer.signalMu.RLock()
 	defer fuzzer.signalMu.RUnlock()
-	extra = fuzzer.checkNewObjectSignal(p, &info.Extra, -1)
+	extra = fuzzer.checkNewObjectCallSignal(p, &info.Extra, -1)
+	log.Logf(0, "checkNewObjectSignal: extra=%v\n", extra)
 	return
 }
 
-func (fuzzer *Fuzzer) checkNewObjectSignal(p *prog.Prog, info *ipc.CallInfo, call int) bool {
+func (fuzzer *Fuzzer) checkNewObjectCallSignal(p *prog.Prog, info *ipc.CallInfo, call int) bool {
 	diff := fuzzer.maxObjectSignal.DiffRaw(info.ObjectSignal, signalPrio(p, info, call))
+	log.Logf(0, "checkNewObjectCallSignal: len(info.ObjectSignal)=%d len(diff)=%d\n", len(info.ObjectSignal), len(diff))
 	if diff.Empty() {
 		return false
 	}

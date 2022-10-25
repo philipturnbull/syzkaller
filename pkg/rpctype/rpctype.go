@@ -81,6 +81,7 @@ type PollRes struct {
 	Candidates []Candidate
 	NewInputs  []Input
 	MaxSignal  signal.Serial
+	MaxObjectSignal signal.Serial
 }
 
 type RunnerConnectArgs struct {

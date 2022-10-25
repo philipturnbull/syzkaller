@@ -1,3 +1,4 @@
+threadSchedule(01)
 # Tests for binfmt_misc.
 # Executor setups binfmt_misc with ./file0 interpreter for files with byte 0x01 at offset 0.
 

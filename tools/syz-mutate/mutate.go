@@ -138,7 +138,9 @@ func main() {
 			fmt.Fprintf(os.Stderr, "failed to deserialize the program: %v\n", err)
 			os.Exit(1)
 		}
-		p.Mutate(rs, *flagLen, ct, nil, corpus)
+		//p.Mutate(rs, *flagLen, ct, nil, corpus)
+		x := p.MutateLeaves(rs, ct, nil)
+		fmt.Printf("x=%v\n", x)
 	}
 	fmt.Printf("%s\n", p.Serialize())
 }

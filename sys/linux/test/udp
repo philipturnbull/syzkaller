@@ -1,3 +1,4 @@
+threadSchedule(01)
 # This simply creates 2 UDP sockets and sends a packet between them.
 
 r0 = socket$inet_udp(AUTO, AUTO, AUTO)

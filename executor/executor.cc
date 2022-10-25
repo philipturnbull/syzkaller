@@ -919,7 +919,7 @@ void parent_copyin()
 		thread_call_call->props = call_props;
 		thread_call_call->index = call_index++;
 
-		debug("copyin_parent: added call %d to thread %d\n", thread_call_call->index, call_props.thread_index);
+		// debug("copyin_parent: added call %d to thread %d\n", thread_call_call->index, call_props.thread_index);
 
 		memset(&call_props, 0, sizeof(call_props));
 	}
@@ -1654,7 +1654,7 @@ void write_object_overlaps()
 		for (int i = 0; i < num_object_overlaps; i++) {
 			uint32_t hash = object_overlaps[i].hash;
 			write_output(hash);
-			debug("%s: hash[%d] = 0x%08x\n", __func__, i, hash);
+			// debug("%s: hash[%d] = 0x%08x\n", __func__, i, hash);
 		}
 
 		*object_signal_count_pos = num_object_overlaps;

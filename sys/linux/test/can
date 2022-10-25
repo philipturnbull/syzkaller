@@ -1,3 +1,4 @@
+threadSchedule(01)
 r0 = socket$can_j1939(AUTO, AUTO, AUTO)
 ioctl$ifreq_SIOCGIFINDEX_vcan(r0, AUTO, &AUTO={'vxcan0\x00', <r1=>0x0})
 bind$can_j1939(r0, &AUTO={AUTO, r1, 0x0, {0x0, 0x0, 0x0, 0x0}, 0x0}, AUTO)

@@ -340,7 +340,6 @@ func (env *Env) parseOutput(p *prog.Prog, opts *ExecOpts) (*ProgInfo, error) {
 			return nil, fmt.Errorf("failed to read call %v reply", i)
 		}
 		reply := *(*callReply)(unsafe.Pointer(&out[0]))
-		log.Logf(1, "reply=%v", reply)
 		out = out[unsafe.Sizeof(callReply{}):]
 		var inf *CallInfo
 		if reply.magic != outMagic {
@@ -401,6 +400,7 @@ func convertExtra(extraParts []CallInfo, dedupCover bool) CallInfo {
 			extra.Cover = append(extra.Cover, part.Cover...)
 		}
 	}
+
 	extraSignal := make(signal.Signal)
 	for _, part := range extraParts {
 		extraSignal.Merge(signal.FromRaw(part.Signal, 0))
@@ -411,6 +411,18 @@ func convertExtra(extraParts []CallInfo, dedupCover bool) CallInfo {
 		extra.Signal[i] = uint32(s)
 		i++
 	}
+
+	extraObjectSignal := make(signal.Signal)
+	for _, part := range extraParts {
+		extraObjectSignal.Merge(signal.FromRaw(part.ObjectSignal, 0))
+	}
+	extra.ObjectSignal = make([]uint32, len(extraObjectSignal))
+	i = 0
+	for s := range extraObjectSignal {
+		extra.ObjectSignal[i] = uint32(s)
+		i++
+	}
+
 	return extra
 }
 

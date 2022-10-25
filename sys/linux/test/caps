@@ -1,3 +1,4 @@
+threadSchedule(01)
 # Ensure that test processes don't have capabilities to do dangerious things,
 # see drop_caps function in executor for details.
 # requires: -sandbox=

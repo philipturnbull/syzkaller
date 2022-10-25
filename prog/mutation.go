@@ -67,7 +67,7 @@ func (p *Prog) MutateThreadSchedule(rs rand.Source, ncalls int, ct *ChoiceTable,
 	}
 }
 
-func (p *Prog) MutateLeaves(rs rand.Source, ct *ChoiceTable, noMutate map[int]bool) {
+func (p *Prog) MutateLeaves(rs rand.Source, ct *ChoiceTable, noMutate map[int]bool) bool {
 	r := newRand(p.Target, rs)
 	ctx := &mutator{
 		p:	p,
@@ -77,10 +77,86 @@ func (p *Prog) MutateLeaves(rs rand.Source, ct *ChoiceTable, noMutate map[int]bo
 		noMutate: noMutate,
 		corpus: []*Prog{},
 	}
-}
 
-func (p *Prog) countLeaves() int {
-	for _, c := range p.Calls {
+	return ctx.mutateLeafArg()
+}
+	
+func (ctx *mutator) mutateLeafArg() bool {
+	p, r := ctx.p, ctx.r
+	if len(p.Calls) == 0 {
+		return false
+	}
+
+	idx := chooseCall(p, r)
+	if idx < 0 {
+		return false
+	}
+	c := p.Calls[idx]
+	if ctx.noMutate[c.Meta.ID] {
+		return false
+	}
+	updateSizes := true
+	for stop, ok := false, false; !stop; stop = ok && r.oneOf(3) {
+		ok = true
+		ma := &mutationArgs{target: p.Target}
+		ForeachArg(c, ma.collectArg)
+		if len(ma.args) == 0 {
+			return false
+		}
+		s := analyze(ctx.ct, ctx.corpus, p, c)
+		arg, argCtx := ma.chooseArg(r.Rand)
+
+		mutate := false
+
+		switch arg.Type().(type) {
+		case *IntType:
+			mutate = true
+		case *StructType:
+			mutate = false
+		case *UnionType:
+			mutate = false
+		case *FlagsType:
+			mutate = true
+		case *PtrType:
+			mutate = true
+		case *ConstType:
+			mutate = true
+		case *CsumType:
+			mutate = false
+		case *ProcType:
+			mutate = false
+		case *ResourceType:
+			mutate = false
+		case *VmaType:
+			mutate = true
+		case *LenType:
+			mutate = true
+		case *BufferType:
+			mutate = true
+		case *ArrayType:
+			mutate = false
+		}
+
+		if !mutate {
+			continue
+		}
+
+		calls, ok1 := p.Target.mutateArg(r, s, arg, argCtx, &updateSizes)
+		if !ok1 {
+			ok = false
+			continue
+		}
+		if len(calls) > 0 {
+			// adding extra calls makes the threadSchedule meaningless
+			return false
+		}
+
+		if updateSizes {
+			p.Target.assignSizesCall(c)
+		}
+	}
+
+	return true
 }
 
 // Mutate program p.
@@ -125,6 +201,7 @@ func (p *Prog) Mutate(rs rand.Source, ncalls int, ct *ChoiceTable, noMutate map[
 		}
 	}
 	p.sanitizeFix()
+	p.FixupThreads()
 	p.debugValidate()
 	if got := len(p.Calls); got < 1 || got > ncalls {
 		panic(fmt.Sprintf("bad number of calls after mutation: %v, want [1, %v]", got, ncalls))
@@ -168,15 +245,12 @@ func InsertThread(ts []int, index int, thread int) []int {
 
 	newTS := make([]int, len(ts)+1)
 	if index == 0 {
-		fmt.Printf("index == 0\n")
 		newTS[0] = thread
 		copy(newTS[1:], ts)
 	} else if index == len(ts) {
-		fmt.Printf("index == len(ts) - 1\n")
 		copy(newTS, ts)
 		newTS[index] = thread
 	} else {
-		fmt.Printf("else\n")
 		copy(newTS[:index], ts[:index])
 		newTS[index] = thread
 		copy(newTS[index+1:], ts[index:])

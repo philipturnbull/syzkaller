@@ -1,3 +1,4 @@
+threadSchedule(01)
 # Basic test for cgroups and executor cgroup setup.
 # This inherently does not work with sandbox="" because sandbox does part of setup.
 # TODO(dvyukov): sandbox=setuid has some permissions setup problems.

@@ -1,3 +1,4 @@
+threadSchedule(01)
 # requires: manual
 
 r0 = openat$bifrost(0xffffffffffffff9c, &AUTO='/dev/bifrost\x00', 0x2, 0x0)

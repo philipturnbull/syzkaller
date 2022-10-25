@@ -1,3 +1,4 @@
+threadSchedule(01)
 # This creates an immutable file, which we previously failed to clean up.
 # Note: the ioctl only works on ext4 but not on tmpfs, so it will fail with namespace sandbox.
 # It also requires root, so will fail with setuid.

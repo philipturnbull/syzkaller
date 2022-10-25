@@ -186,11 +186,27 @@ func (proc *Proc) triageInput(item *WorkTriage) {
 }
 
 func (proc *Proc) triageObject(item *ObjectTriage) {
-	log.Logf(1, "#%v: triaging object type=%x", proc.pid, item.flags)
-	for i := 0; i < 100; i++ {
+	iterations := 0
+	for _, c := range item.p.Calls {
+		iterations += len(c.Args) * 16
+	}
+
+	log.Logf(1, "#%v: triaging object type=%x, iterations=%d", proc.pid, item.flags, iterations)
+
+	hashes := make(map[string]bool)
+
+	for i := 0; i < iterations; i++ {
 		p := item.p.Clone()
-		p.MutateThreadSchedule(proc.rnd, proc.fuzzer.choiceTable, proc.fuzzer.noMutate)
-		proc.execute(proc.execOpts, p, ProgNormal, StatTriageObject)
+		if p.MutateLeaves(proc.rnd, proc.fuzzer.choiceTable, proc.fuzzer.noMutate) {
+			data := p.Serialize()
+			h := hash.String(data)
+			if _, ok := hashes[h]; ok {
+				atomic.AddUint64(&proc.fuzzer.stats[StatDuplicateTriageObject], 1)
+			} else {
+				hashes[h] = true
+				proc.execute(proc.execOpts, p, ProgNormal, StatTriageObject)
+			}
+		}
 	}
 }
 
@@ -312,6 +328,8 @@ func (proc *Proc) enqueueCallTriage(p *prog.Prog, flags ProgTypes, callIndex int
 }
 
 func (proc *Proc) enqueueObjectTriage(p *prog.Prog, flags ProgTypes) {
+	atomic.AddUint64(&proc.fuzzer.stats[StatEnqueueObjectTriage], 1)
+	log.Logf(1, "#%v: enqueued object triage", proc.pid)
 	proc.fuzzer.workQueue.enqueue(&ObjectTriage{
 		p:     p.Clone(),
 		flags: flags,
@@ -364,10 +382,11 @@ func (proc *Proc) randomCollide(origP *prog.Prog) *prog.Prog {
 func (proc *Proc) executeRaw(opts *ipc.ExecOpts, p *prog.Prog, stat Stat) *ipc.ProgInfo {
 	proc.fuzzer.checkDisabledCalls(p)
 
-	should_execute, _ := p.ShouldExecuteProg()
+	should_execute, reason, _ := p.ShouldExecuteProg()
 	if should_execute {
 		atomic.AddUint64(&proc.fuzzer.stats[StatShouldExecute], 1)
 	} else {
+		log.Logf(0, "executeRaw: not executing, %s\n", reason)
 		atomic.AddUint64(&proc.fuzzer.stats[StatShouldNotExecute], 1)
 		return nil
 	}
