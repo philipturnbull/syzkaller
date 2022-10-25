@@ -1,0 +1,8 @@
+threadSchedule(0101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101)
+r0 = add_key$keyring(&AUTO, &AUTO={'syz', 0x0, 0x1}, 0x0, 0x0, 0xfffffffffffffffe)
+r1 = add_key$keyring(&AUTO, &AUTO={'syz', 0x0, 0x1}, 0x0, 0x0, 0xfffffffffffffffe)
+r2 = add_key$user(&AUTO, &AUTO={'syz', 0x0, 0x1}, &AUTO="AAAA", 0x4, r0)
+keyctl$link(0x8, r2, r0) (thread_index: 1)
+keyctl$link(0x8, r2, r1) (thread_index: 1)
+keyctl$link(0x8, r2, r0) (thread_index: 2)
+keyctl$link(0x8, r2, r1) (thread_index: 2)
