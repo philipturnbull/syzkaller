@@ -743,6 +743,8 @@ func (p *Prog) ShouldExecuteProg() (bool, string, ProgThreadInfo) {
 	}
 	*/
 
+	return true, FoundOverlap, info
+/*
 	for _, usage := range info.Overlaps {
 		if usage.Usage[1] > 0 && usage.Usage[2] > 0 {
 			return true, FoundOverlap, info
@@ -750,6 +752,7 @@ func (p *Prog) ShouldExecuteProg() (bool, string, ProgThreadInfo) {
 	}
 
 	return false, NoOverlap, info
+*/
 }
 
 func (p *Prog) SwitchThreadIndex(from int, to int, panicReason string) bool {
