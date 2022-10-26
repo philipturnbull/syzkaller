@@ -6,6 +6,8 @@ package prog
 import (
 	"fmt"
 	"reflect"
+
+	"github.com/google/syzkaller/pkg/log"
 )
 
 type Prog struct {
@@ -432,6 +434,346 @@ func (p *Prog) RemoveCall(idx int) {
 	}
 	copy(p.Calls[idx:], p.Calls[idx+1:])
 	p.Calls = p.Calls[:len(p.Calls)-1]
+}
+
+func (p *Prog) CallRemovalWouldRemoveThread(idx int) bool {
+	found1 := false
+	found2 := false
+
+	for i, call := range p.Calls {
+		if i == idx {
+			continue
+		}
+
+		ti := call.Props.ThreadIndex
+
+		if ti == 1 {
+			found1 = true
+		} else if ti == 2 {
+			found2 = true
+		}
+	}
+
+	return !found1 || !found2
+}
+
+func (p *Prog) HasAllThreads() bool {
+	found0 := false
+	found1 := false
+	found2 := false
+
+	for _, call := range p.Calls {
+		ti := call.Props.ThreadIndex
+
+		if ti == 0 {
+			found0 = true
+		} else if ti == 1 {
+			found1 = true
+		} else if ti == 2 {
+			found2 = true
+		}
+	}
+
+	return found0 && found1 && found2
+}
+
+func argUsesResultArg(resultArgs map[Arg]bool, arg Arg) bool {
+	if arg == nil {
+		return false
+	}
+
+	switch arg := arg.(type) {
+	case *ConstArg:
+		return false
+	case *PointerArg:
+		return argUsesResultArg(resultArgs, arg.Res)
+	case *DataArg:
+		return false
+	case *GroupArg:
+		for _, garg := range arg.Inner {
+			if argUsesResultArg(resultArgs, garg) {
+				return true
+			}
+		}
+
+		return false
+	case *UnionArg:
+		return argUsesResultArg(resultArgs, arg.Option)
+	case *ResultArg:
+		if arg.Res == nil {
+			return false
+		}
+
+		resultArgs[arg.Res] = true
+		return true
+	default:
+		panic(fmt.Sprintf("unknown type: %T\n", arg))
+	}
+}
+
+func callUsesResultArg(resultArgs map[Arg]bool, c Call) bool {
+	for _, arg := range c.Args {
+		if argUsesResultArg(resultArgs, arg) {
+			return true
+		}
+	}
+
+	return false
+}
+
+type ResultUsage struct {
+	Usage []int
+}
+func findOverlap(overlaps map[Arg]ResultUsage, callIndex int, thread int, arg Arg) {
+	if arg == nil {
+		return
+	}
+
+	switch arg := arg.(type) {
+	case *ConstArg:
+	case *PointerArg:
+		findOverlap(overlaps, callIndex, thread, arg.Res)
+	case *DataArg:
+	case *GroupArg:
+		for _, garg := range arg.Inner {
+			findOverlap(overlaps, callIndex, thread, garg)
+		}
+	case *UnionArg:
+		findOverlap(overlaps, callIndex, thread, arg.Option)
+	case *ResultArg:
+		if arg.Res != nil {
+			if usage, ok := overlaps[arg.Res]; ok {
+				usage.Usage[thread] += 1
+				overlaps[arg.Res] = usage
+			} else {
+				usage = ResultUsage {Usage: []int{0, 0, 0}}
+				usage.Usage[thread] += 1
+				overlaps[arg.Res] = usage
+			}
+		}
+	default:
+		panic(fmt.Sprintf("unknown type: %T\n", arg))
+	}
+}
+
+type ThreadCallInfo struct {
+	Used bool
+	UsesResultArg bool
+}
+
+type ProgThreadInfo struct {
+	NumCalls int
+	NumThreadCalls[3] int
+	CallInfo[3][] ThreadCallInfo
+	Overlaps map[Arg]ResultUsage
+}
+
+func (p *Prog) AnalyzeThreads() ProgThreadInfo {
+	numCalls := len(p.Calls)
+	info := ProgThreadInfo{
+		NumCalls: numCalls,
+		CallInfo: [3][]ThreadCallInfo{
+			make([]ThreadCallInfo, numCalls),
+			make([]ThreadCallInfo, numCalls),
+			make([]ThreadCallInfo, numCalls),
+		},
+		Overlaps: make(map[Arg]ResultUsage),
+	}
+
+	for callIndex, call := range p.Calls {
+		ti := call.Props.ThreadIndex
+
+		info.NumThreadCalls[ti] += 1
+
+		if ti == 0 {
+		} else {
+			usesResultArg := false
+			for _, arg := range call.Args {
+				if argUsesResultArg(make(map[Arg]bool), arg) {
+					usesResultArg = true
+				}
+
+				findOverlap(info.Overlaps, callIndex, ti, arg)
+			}
+
+			info.CallInfo[ti][callIndex].UsesResultArg = usesResultArg
+			info.CallInfo[ti][callIndex].Used = true
+		}
+	}
+
+	return info
+}
+
+const NotEnoughCalls = "not enought calls"
+const MissingRequiredCall = "missing required call"
+const MissingThread1 = "missing thread 1"
+const MissingThread2 = "missing thread 1"
+const CallInThread1DoesNotUseResultArg = "call in thread 1 does not use result arg"
+const CallInThread2DoesNotUseResultArg = "call in thread 2 does not use result arg"
+const FoundOverlap = "found overlap"
+const NoOverlap = "no overlap"
+
+func (p *Prog) hasCall(callName string) bool {
+	for _, call := range p.Calls {
+		if call.Meta.Name == callName {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (p *Prog) ShouldExecuteProg() (bool, string, ProgThreadInfo) {
+	info := p.AnalyzeThreads()
+
+	if info.NumCalls < 2 {
+		return false, NotEnoughCalls, info
+	}
+
+	for _, callName := range requiredCalls() {
+		if !p.hasCall(callName) {
+			return false, MissingRequiredCall, info
+		}
+	}
+
+	if info.NumThreadCalls[1] == 0 {
+		return false, MissingThread1, info
+	}
+
+	if info.NumThreadCalls[2] == 0 {
+		return false, MissingThread2, info
+	}
+
+	if requireAllThreadCallsToUseResultArg() {
+		for _, callInfo := range info.CallInfo[1] {
+			if callInfo.Used && !callInfo.UsesResultArg {
+				return false, CallInThread1DoesNotUseResultArg, info
+			}
+		}
+
+		for _, callInfo := range info.CallInfo[2] {
+			if callInfo.Used && !callInfo.UsesResultArg {
+				return false, CallInThread2DoesNotUseResultArg, info
+			}
+		}
+	}
+
+	if !requireResourceOverlap() {
+		return true, FoundOverlap, info
+	}
+
+	for _, usage := range info.Overlaps {
+		if usage.Usage[1] > 0 && usage.Usage[2] > 0 {
+			return true, FoundOverlap, info
+		}
+	}
+
+	return false, NoOverlap, info
+}
+
+func (p *Prog) SwitchThreadIndex(from int, to int, panicReason string) bool {
+	info := p.AnalyzeThreads()
+
+	targetThreadIndex := 0
+	if info.NumThreadCalls[0] == 0 {
+		if info.NumThreadCalls[from] == 0 {
+			panic(fmt.Sprintf("info.NumThreadCalls[%d] == 0", from))
+		}
+		targetThreadIndex = to
+	}
+
+	for i := range p.Calls {
+		i = len(p.Calls) - 1 - i
+		if p.Calls[i].Props.ThreadIndex == targetThreadIndex {
+			p.Calls[i].Props.ThreadIndex = to
+			break
+		}
+	}
+
+	ok, reason, _ := p.ShouldExecuteProg()
+	if ok {
+		return true
+	}
+
+	if reason == panicReason {
+		panic(fmt.Sprintf("FixupThreads: %s", panicReason))
+	}
+
+	return p.FixupThreads()
+}
+
+func (p *Prog) FixupThreads() bool {
+	ok, reason, info := p.ShouldExecuteProg()
+	if ok {
+		return true
+	}
+
+	if reason == NotEnoughCalls {
+		/* can't fix this up */
+		return false
+	}
+
+	if reason == MissingThread1 && p.SwitchThreadIndex(2, 1, MissingThread1) {
+		log.Logf(0, "FixupThreads: fixed up missing thread 1\n")
+		return true
+	}
+
+	ok, reason, info = p.ShouldExecuteProg()
+	if ok {
+		/* impossible? */
+		return true
+	}
+
+	if reason == MissingThread2 && p.SwitchThreadIndex(1, 2, MissingThread2) {
+		log.Logf(0, "FixupThreads: fixed up missing thread 2\n")
+		return true
+	}
+
+	ok, reason, info = p.ShouldExecuteProg()
+	if ok {
+		/* impossible? */
+		return true
+	}
+
+	if reason == NoOverlap {
+		for i := range p.Calls {
+			i = len(p.Calls) - 1 - i
+			resultArgs := make(map[Arg]bool)
+			ti := p.Calls[i].Props.ThreadIndex
+
+			if ti != 0 {
+				continue
+			}
+
+			if callUsesResultArg(resultArgs, *p.Calls[i]) {
+				for resultArg := range resultArgs {
+					for candidateArg, overlapInfo := range info.Overlaps {
+						if resultArg == candidateArg {
+							if overlapInfo.Usage[1] == 0 && overlapInfo.Usage[2] > 0 {
+								p.Calls[i].Props.ThreadIndex = 1
+								ok, _, _ = p.ShouldExecuteProg()
+
+								if ok {
+									log.Logf(0, "FixupThreads: fixed up missing overlap\n")
+								}
+								return ok
+							} else if overlapInfo.Usage[1] > 0 && overlapInfo.Usage[2] == 0 {
+								p.Calls[i].Props.ThreadIndex = 2
+								ok, _, _ = p.ShouldExecuteProg()
+
+								if ok {
+									log.Logf(0, "FixupThreads: fixed up missing overlap\n")
+								}
+								return ok
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 func (p *Prog) sanitizeFix() {

@@ -583,6 +583,12 @@ func (r *randGen) generateParticularCall(s *state, meta *Syscall) (calls []*Call
 	c := MakeCall(meta, nil)
 	c.Args, calls = r.generateArgs(s, meta.Args, DirIn)
 	r.target.assignSizesCall(c)
+	if forceParentThread(meta) {
+		c.Props.ThreadIndex = 0
+	} else {
+		c.Props.ThreadIndex = (int)(r.randInt(32) % 3)
+	}
+
 	return append(calls, c)
 }
 
@@ -619,6 +625,7 @@ func (target *Target) GenerateAllSyzProg(rs rand.Source) *Prog {
 func (target *Target) DataMmapProg() *Prog {
 	return &Prog{
 		Target: target,
+		ThreadSchedule: []int{0, 1},
 		Calls:  target.MakeDataMmap(),
 	}
 }
@@ -702,16 +709,28 @@ func (a *ResourceType) generate(r *randGen, s *state, dir Dir) (arg Arg, calls [
 		r.inGenerateResource = true
 		defer func() { r.inGenerateResource = false }()
 
-		if r.oneOf(4) {
-			arg, calls = r.resourceCentric(s, a, dir)
+		if requiredResource(a) {
+			arg = r.existingResource(s, a, dir)
 			if arg != nil {
 				return
 			}
-		}
-		if r.oneOf(3) {
+
 			arg, calls = r.createResource(s, a, dir)
 			if arg != nil {
 				return
+			}
+		} else {
+			if r.oneOf(4) {
+				arg, calls = r.resourceCentric(s, a, dir)
+				if arg != nil {
+					return
+				}
+			}
+			if r.oneOf(3) {
+				arg, calls = r.createResource(s, a, dir)
+				if arg != nil {
+					return
+				}
 			}
 		}
 	}

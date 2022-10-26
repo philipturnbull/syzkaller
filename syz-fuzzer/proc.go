@@ -69,6 +69,7 @@ func (proc *Proc) loop() {
 	for i := 0; ; i++ {
 		item := proc.fuzzer.workQueue.dequeue()
 		if item != nil {
+			log.Logf(0, "loop: dequeued work %T\n", item)
 			switch item := item.(type) {
 			case *WorkTriage:
 				proc.triageInput(item)
@@ -88,11 +89,13 @@ func (proc *Proc) loop() {
 		fuzzerSnapshot := proc.fuzzer.snapshot()
 		if len(fuzzerSnapshot.corpus) == 0 || i%generatePeriod == 0 {
 			// Generate a new prog.
+			log.Logf(0, "loop: generating program\n")
 			p := proc.fuzzer.target.Generate(proc.rnd, prog.RecommendedCalls, ct)
 			log.Logf(1, "#%v: generated", proc.pid)
 			proc.executeAndCollide(proc.execOpts, p, ProgNormal, StatGenerate)
 		} else {
 			// Mutate an existing prog.
+			log.Logf(0, "loop: mutate program\n")
 			p := fuzzerSnapshot.chooseProgram(proc.rnd).Clone()
 			p.Mutate(proc.rnd, prog.RecommendedCalls, ct, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
 			log.Logf(1, "#%v: mutated", proc.pid)
@@ -243,14 +246,14 @@ func (proc *Proc) smashInput(item *WorkSmash) {
 	fuzzerSnapshot := proc.fuzzer.snapshot()
 	for i := 0; i < 10; i++ {
 		p := item.p.Clone()
-		p.MutateThreadSchedule(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
+		p.MutateThreadSchedule(proc.rnd)
 		log.Logf(1, "#%v: smash mutated thread-schedule", proc.pid)
 		proc.execute(proc.execOpts, p, ProgNormal, StatSmashThreadSchedule)
 	}
 
 	for i := 0; i < 30; i++ {
 		p := item.p.Clone()
-		p.RandomizeThreadSchedule(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
+		p.RandomizeThreadSchedule(proc.rnd)
 		log.Logf(1, "#%v: smash mutated thread-schedule-random", proc.pid)
 		proc.execute(proc.execOpts, p, ProgNormal, StatSmashThreadSchedule)
 	}
@@ -339,17 +342,16 @@ func (proc *Proc) enqueueObjectTriage(p *prog.Prog, flags ProgTypes) {
 func (proc *Proc) executeAndCollide(execOpts *ipc.ExecOpts, p *prog.Prog, flags ProgTypes, stat Stat) {
 	proc.execute(execOpts, p, flags, stat)
 
-	fuzzerSnapshot := proc.fuzzer.snapshot()
 	for i := 0; i < 3; i++ {
 		p := p.Clone()
-		p.MutateThreadSchedule(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
+		p.MutateThreadSchedule(proc.rnd)
 		log.Logf(1, "#%v: exec mutated thread-schedule", proc.pid)
 		proc.execute(proc.execOpts, p, ProgNormal, StatRandomThread)
 	}
 
 	for i := 0; i < 7; i++ {
 		p := p.Clone()
-		p.RandomizeThreadSchedule(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
+		p.RandomizeThreadSchedule(proc.rnd)
 		log.Logf(1, "#%v: exec mutated thread-schedule-random", proc.pid)
 		proc.execute(proc.execOpts, p, ProgNormal, StatRandomThread)
 	}

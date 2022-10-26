@@ -14,6 +14,145 @@ import (
 // Maximum length of generated binary blobs inserted into the program.
 const maxBlobLen = uint64(100 << 10)
 
+func (p *Prog) RandomizeThreadSchedule(rs rand.Source) {
+	r := newRand(p.Target, rs)
+
+	newTS := []int{}
+	newLength := len(p.ThreadSchedule)
+	if newLength < 256 {
+		newLength = 256
+	}
+
+	for i := 0; i < newLength; i++ {
+		newTS = append(newTS, (int)(r.randInt(32) % 2))
+	}
+
+	p.ThreadSchedule = newTS
+
+	p.sanitizeFix()
+	p.debugValidate()
+}
+
+func (p *Prog) MutateThreadSchedule(rs rand.Source) {
+	r := newRand(p.Target, rs)
+
+	ctx := &mutator{
+		p:        p,
+		r:        r,
+		ncalls:   0,
+		ct:       nil,
+		noMutate: nil,
+		corpus:   nil,
+	}
+	for stop, ok := false, false; !stop; stop = ok && len(p.Calls) != 0 && r.oneOf(3) {
+		switch {
+		case r.nOutOf(1, 10):
+			ok = ctx.changeThread()
+		default:
+			ok = ctx.mutateThreadSchedule()
+		}
+	}
+	p.sanitizeFix()
+	p.debugValidate()
+}
+
+func (p *Prog) MutateLeaves(rs rand.Source, ct *ChoiceTable, noMutate map[int]bool) bool {
+	r := newRand(p.Target, rs)
+	ctx := &mutator{
+		p:	p,
+		r:	r,
+		ncalls:	0,
+		ct:	ct,
+		noMutate: noMutate,
+		corpus: []*Prog{},
+	}
+
+	return ctx.mutateLeafArg()
+}
+
+func (ctx *mutator) mutateLeafArg() bool {
+	p, r := ctx.p, ctx.r
+	if len(p.Calls) == 0 {
+		return false
+	}
+
+	idx := chooseCall(p, r)
+	if idx < 0 {
+		return false
+	}
+	c := p.Calls[idx]
+	if ctx.noMutate[c.Meta.ID] {
+		return false
+	}
+	updateSizes := true
+	for stop, ok := false, false; !stop; stop = ok && r.oneOf(3) {
+		ok = true
+		ma := &mutationArgs{target: p.Target}
+		ForeachArg(c, ma.collectArg)
+		if len(ma.args) == 0 {
+			return false
+		}
+		s := analyze(ctx.ct, ctx.corpus, p, c)
+
+		arg, argCtx := ma.chooseArg(r.Rand)
+		for {
+			mutate := false
+
+			switch arg.Type().(type) {
+			case *IntType:
+				mutate = true
+			case *StructType:
+				mutate = false
+			case *UnionType:
+				mutate = false
+			case *FlagsType:
+				mutate = true
+			case *PtrType:
+				mutate = true
+			case *ConstType:
+				mutate = true
+			case *CsumType:
+				mutate = false
+			case *ProcType:
+				mutate = false
+			case *ResourceType:
+				mutate = false
+			case *VmaType:
+				mutate = true
+			case *LenType:
+				mutate = true
+			case *BufferType:
+				mutate = true
+			case *ArrayType:
+				mutate = false
+			}
+
+			if mutate {
+				break
+			}
+
+			arg, argCtx = ma.chooseArg(r.Rand)
+		}
+
+
+		calls, ok1 := p.Target.mutateArg(r, s, arg, argCtx, &updateSizes)
+		if !ok1 {
+			ok = false
+			continue
+		}
+		if len(calls) > 0 {
+			// adding extra calls makes the threadSchedule meaningless
+			return false
+		}
+
+		if updateSizes {
+			p.Target.assignSizesCall(c)
+		}
+	}
+
+	return true
+}
+
 // Mutate program p.
 //
 // p:           The program to mutate.
@@ -37,6 +176,10 @@ func (p *Prog) Mutate(rs rand.Source, ncalls int, ct *ChoiceTable, noMutate map[
 	}
 	for stop, ok := false, false; !stop; stop = ok && len(p.Calls) != 0 && r.oneOf(3) {
 		switch {
+		case r.nOutOf(1, 10):
+			ok = ctx.mutateThreadSchedule()
+		case r.nOutOf(1, 20):
+			ok = ctx.changeThread()
 		case r.oneOf(5):
 			// Not all calls have anything squashable,
 			// so this has lower priority in reality.
@@ -52,6 +195,7 @@ func (p *Prog) Mutate(rs rand.Source, ncalls int, ct *ChoiceTable, noMutate map[
 		}
 	}
 	p.sanitizeFix()
+	p.FixupThreads()
 	p.debugValidate()
 	if got := len(p.Calls); got < 1 || got > ncalls {
 		panic(fmt.Sprintf("bad number of calls after mutation: %v, want [1, %v]", got, ncalls))
@@ -84,6 +228,130 @@ func (ctx *mutator) splice() bool {
 	for i := len(p.Calls) - 1; i >= ctx.ncalls; i-- {
 		p.RemoveCall(i)
 	}
+
+	return true
+}
+
+func InsertThread(ts []int, index int, thread int) []int {
+	newTS := make([]int, len(ts)+1)
+	if index == 0 {
+		newTS[0] = thread
+		copy(newTS[1:], ts)
+	} else if index == len(ts) {
+		copy(newTS, ts)
+		newTS[index] = thread
+	} else {
+		copy(newTS[:index], ts[:index])
+		newTS[index] = thread
+		copy(newTS[index+1:], ts[index:])
+	}
+
+	return newTS
+}
+
+func DeleteThread(ts []int, index int) []int {
+	newTS := make([]int, len(ts)-1)
+
+	if index == 0 {
+		copy(newTS, ts[1:])
+	} else if index == len(ts) {
+		copy(newTS, ts[:index-1])
+	} else {
+		copy(newTS[0:], ts[:index])
+		copy(newTS[index:], ts[index+1:])
+	}
+
+	return newTS
+}
+
+func InvertThread(ts []int, index int) []int {
+	newTS := make([]int, len(ts))
+	copy(newTS, ts)
+	newTS[index] = (ts[index]+1) % 2
+
+	return newTS
+}
+
+func (ctx *mutator) mutateThreadSchedule() bool {
+	p, r := ctx.p, ctx.r
+
+	ts := p.ThreadSchedule
+
+	newTS := []int{}
+
+	operation := r.randInt(32) % 3
+	switch operation {
+	case 0: // insert
+		index := r.Intn(len(ts))
+		thread := (int)(r.randInt(32) % 2)
+		newTS = InsertThread(ts, index, thread)
+	case 1: // delete
+		index := r.Intn(len(ts))
+		newTS = DeleteThread(ts, index)
+	case 2: // invert
+		index := r.Intn(len(ts))
+		newTS = InvertThread(ts, index)
+	}
+
+	has0 := false
+	has1 := false
+	for _, t := range newTS {
+		if t == 0 {
+			has0 = true
+		}
+		if t == 1 {
+			has1 = true
+		}
+	}
+
+	if !has0 {
+		newTS = append(newTS, 0)
+	}
+	if !has1 {
+		newTS = append(newTS, 1)
+	}
+
+	p.ThreadSchedule = newTS
+	return true
+}
+
+func (ctx *mutator) changeThread() bool {
+	p, r := ctx.p, ctx.r
+
+	idx := chooseCall(p, r)
+	if idx < 0 {
+		return false
+	}
+	c := p.Calls[idx]
+	if ctx.noMutate[c.Meta.ID] {
+		return false
+	}
+
+	if forceParentThread(c.Meta) {
+		return false
+	}
+
+	found1 := false
+	found2 := false
+	for i, call := range p.Calls {
+		if i != idx {
+			if call.Props.ThreadIndex == 0 {
+				found1 = true
+			} else if call.Props.ThreadIndex == 1 {
+				found2 = true
+			}
+		}
+	}
+
+	if !found1 || !found2 {
+		return false
+	}
+
+	newThreadIndex := (int)(r.randInt(32) % 3)
+	for newThreadIndex == c.Props.ThreadIndex {
+		newThreadIndex = (int)(r.randInt(32) % 3)
+	}
+	c.Props.ThreadIndex = newThreadIndex
 	return true
 }
 
