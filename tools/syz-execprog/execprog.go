@@ -304,7 +304,9 @@ func loadPrograms(target *prog.Target, files []string) []*prog.Prog {
 			log.Fatalf("failed to read log file: %v", err)
 		}
 		for _, entry := range target.ParseLog(data) {
-			progs = append(progs, entry.P)
+			if ok, _, _ := entry.P.ShouldExecuteProg(); ok {
+				progs = append(progs, entry.P)
+			}
 		}
 	}
 	log.Logf(0, "parsed %v programs", len(progs))
