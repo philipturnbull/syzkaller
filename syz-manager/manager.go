@@ -629,13 +629,33 @@ func (mgr *Manager) loadCorpus() {
 	log.Logf(0, "%-24v: %v (deleted %v broken)", "corpus", corpusSize, broken)
 
 	for _, seed := range mgr.seeds {
-		mgr.loadProg("", seed.data, true, false)
+		mgr.loadProg(seed.filename, seed.data, true, false)
 	}
 	log.Logf(0, "%-24v: %v/%v", "seeds", len(mgr.candidates)-corpusSize, len(mgr.seeds))
 	for _, filename := range mgr.loadedSeedFilenames {
 		log.Logf(0, "  %s", filename)
 	}
 	mgr.seeds = nil
+
+	missingSeedFile := false
+	for _, filename := range prog.ExpectedSeedFiles() {
+		found := false
+		for _, loaded := range mgr.loadedSeedFilenames {
+			if loaded == filename {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			missingSeedFile = true
+			log.Logf(0, "missing seed file: %s\n", filename)
+		}
+	}
+
+	if missingSeedFile {
+		panic("missing seed files")
+	}
 
 	// We duplicate all inputs in the corpus and shuffle the second part.
 	// This solves the following problem. A fuzzer can crash while triaging candidates,
@@ -654,10 +674,23 @@ func (mgr *Manager) loadCorpus() {
 }
 
 func (mgr *Manager) loadProg(filename string, data []byte, minimized, smashed bool) bool {
-	bad, disabled := checkProgram(mgr.target, mgr.targetEnabledSyscalls, data)
+	bad, disabled, reason := checkProgram(mgr.target, mgr.targetEnabledSyscalls, data)
 	if bad {
+		if filename != "" {
+			log.Logf(0, "error loading program %s: bad=%v disabled=%v reason=%s\n", filename, bad, disabled, reason)
+		}
 		return false
 	}
+
+	if disabled && filename != "" {
+		for _, seedFilename := range prog.ExpectedSeedFiles() {
+			if filename == seedFilename {
+				log.Logf(0, "error loading program %s: bad=%v disabled=%v\n", filename, bad, disabled)
+				return false
+			}
+		}
+	}
+
 	if disabled {
 		if mgr.cfg.PreserveCorpus {
 			// This program contains a disabled syscall.
@@ -706,25 +739,25 @@ func programLeftover(target *prog.Target, enabled map[*prog.Syscall]bool, data [
 	return p.Serialize()
 }
 
-func checkProgram(target *prog.Target, enabled map[*prog.Syscall]bool, data []byte) (bad, disabled bool) {
+func checkProgram(target *prog.Target, enabled map[*prog.Syscall]bool, data []byte) (bad, disabled bool, reason string) {
 	p, err := target.Deserialize(data, prog.NonStrict)
 	if err != nil {
-		return true, true
+		return true, true, ""
 	}
 	if len(p.Calls) > prog.MaxCalls {
-		return true, true
+		return true, true, ""
 	}
 	for _, c := range p.Calls {
 		if !enabled[c.Meta] {
-			return false, true
+			return false, true, ""
 		}
 	}
 
-	if ok, _, _ := p.ShouldExecuteProg(); !ok {
-		return true, true
+	if ok, reason, _ := p.ShouldExecuteProg(); !ok {
+		return true, true, reason
 	}
 
-	return false, false
+	return false, false, ""
 }
 
 func (mgr *Manager) runInstance(index int) (*Crash, error) {
