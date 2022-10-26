@@ -1,3 +1,4 @@
+threadSchedule(01)
 getpid()
 exit_group(0x1)	# unexecuted
 getpid()	# unexecuted

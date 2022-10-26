@@ -1,3 +1,4 @@
+threadSchedule(01)
 # Test how we avoid fuse deadlocks in kill_and_wait.
 # requires: threaded -sandbox= -C,norepeat
 

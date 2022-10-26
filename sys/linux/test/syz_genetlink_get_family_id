@@ -1,3 +1,4 @@
+threadSchedule(01)
 # syz_init_net_socket requires sandbox none, also doesn't work without sandbox b/c we are still in init net ns.
 # requires: -sandbox=
 

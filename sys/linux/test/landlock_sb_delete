@@ -1,3 +1,4 @@
+threadSchedule(01)
 # Creates a new mount point.
 #
 # Mounting requires some privileges:

@@ -1,3 +1,4 @@
+threadSchedule(01)
 # Creates a file hierarchy with a mount point.
 
 mkdirat(0xffffffffffffff9c, &AUTO='./file0\x00', 0x1c0)

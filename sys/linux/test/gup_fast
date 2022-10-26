@@ -1,3 +1,4 @@
+threadSchedule(01)
 # Test for GUP fast.
 # requires: arch=s390x
 

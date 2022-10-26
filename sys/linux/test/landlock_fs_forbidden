@@ -1,3 +1,4 @@
+threadSchedule(01)
 # Access denied to whole syscalls, which return EPERM.
 #
 # Manipuling namespaces requires some privileges:

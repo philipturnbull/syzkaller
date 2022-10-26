@@ -1,3 +1,4 @@
+threadSchedule(01)
 # Creates independent Landlock hierarchies and try different tracer/tracee
 # schemas (without scheduling control).
 

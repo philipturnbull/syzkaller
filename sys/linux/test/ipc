@@ -1,3 +1,4 @@
+threadSchedule(01)
 # Large sem sets must be prohibited in the main ipc namespace.
 # There is no restriction without sandbox. Setuid can't do unshare.
 # requires: -sandbox= -sandbox=setuid

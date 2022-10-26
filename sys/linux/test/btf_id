@@ -1,3 +1,4 @@
+threadSchedule(01)
 # Query the btf_id of the hook name.
 
 r0 = syz_btf_id_by_name$bpf_lsm(&AUTO='bpf_lsm_path_mkdir\x00')
