@@ -793,10 +793,67 @@ func requiredCalls() []string {
 		"keyctl$KEYCTL_WATCH_KEY",
 	}
 }
+/*
+2022/10/26 11:04:41 hasCall(pipe2$watch_queue)
+2022/10/26 11:04:41   *prog.PointerArg: &prog.PointerArg{ArgCommon:prog.ArgCommon{ref:0x2a9e, dir:0x0}, Address:0x40, VmaSize:0x0, Res:(*prog.GroupArg)(0xc0001bf180)}
+2022/10/26 11:04:41   *prog.ConstArg: &prog.ConstArg{ArgCommon:prog.ArgCommon{ref:0x1357, dir:0x0}, Val:0x80}
+2022/10/26 11:04:41 hasCall(ioctl$IOC_WATCH_QUEUE_SET_SIZE)
+2022/10/26 11:04:41   *prog.ResultArg: &prog.ResultArg{ArgCommon:prog.ArgCommon{ref:0x2c4c, dir:0x0}, Res:(*prog.ResultArg)(0xc000303140), OpDiv:0x0, OpAdd:0x0, Val:0x0, uses:map[*prog.ResultArg]bool(nil)}
+2022/10/26 11:04:41   *prog.ConstArg: &prog.ConstArg{ArgCommon:prog.ArgCommon{ref:0x10a2, dir:0x0}, Val:0x5760}
+2022/10/26 11:04:41   *prog.ConstArg: &prog.ConstArg{ArgCommon:prog.ArgCommon{ref:0x185b, dir:0x0}, Val:0x8}
+2022/10/26 11:04:41 ioctl$IOC_WATCH_QUEUE_SET_SIZE: *prog.ResultArg: &{{11340 0} 0xc000303140 0 0 0 map[]}
+2022/10/26 11:04:41 hasCall(keyctl$KEYCTL_WATCH_KEY)
+2022/10/26 11:04:41   *prog.ConstArg: &prog.ConstArg{ArgCommon:prog.ArgCommon{ref:0x1382, dir:0x0}, Val:0x20}
+2022/10/26 11:04:41   *prog.ResultArg: &prog.ResultArg{ArgCommon:prog.ArgCommon{ref:0x2c77, dir:0x0}, Res:(*prog.ResultArg)(nil), OpDiv:0x0, OpAdd:0x0, Val:0xfffffffffffffffe, uses:map[*prog.ResultArg]bool(nil)}
+2022/10/26 11:04:41   *prog.ResultArg: &prog.ResultArg{ArgCommon:prog.ArgCommon{ref:0x2c4c, dir:0x0}, Res:(*prog.ResultArg)(0xc000303140), OpDiv:0x0, OpAdd:0x0, Val:0x0, uses:map[*prog.ResultArg]bool(nil)}
+2022/10/26 11:04:41   *prog.ConstArg: &prog.ConstArg{ArgCommon:prog.ArgCommon{ref:0x1a19, dir:0x0}, Val:0x0}
+*/
 
 func (p *Prog) hasCall(callName string) bool {
 	for _, call := range p.Calls {
 		if call.Meta.Name == callName {
+//			log.Logf(0, "hasCall(%s)\n", call.Meta.Name)
+//			for _, arg := range call.Args {
+//				log.Logf(0, "  %T: %#v\n", arg, arg)
+//			}
+
+			if call.Meta.Name == "pipe2$watch_queue" {
+				if _, ok := call.Args[0].(*PointerArg); !ok {
+					return false
+				}
+				if call.Args[0].(*PointerArg).Res == nil {
+					return false
+				}
+
+				if _, ok := call.Args[1].(*ConstArg); !ok {
+					return false
+				}
+				if call.Args[1].(*ConstArg).Val != 0x80 {
+					return false
+				}
+			}
+
+			if call.Meta.Name == "ioctl$IOC_WATCH_QUEUE_SET_SIZE" {
+				log.Logf(0, "ioctl$IOC_WATCH_QUEUE_SET_SIZE: %T: %v\n", call.Args[0], call.Args[0])
+
+				if _, ok := call.Args[0].(*ResultArg); !ok {
+					return false
+				}
+				if call.Args[0].(*ResultArg).Res == nil {
+					return false
+				}
+			}
+
+
+			if call.Meta.Name == "keyctl$KEYCTL_WATCH_KEY" {
+				if _, ok := call.Args[2].(*ResultArg); !ok {
+					return false
+				}
+				if call.Args[2].(*ResultArg).Res == nil {
+					return false
+				}
+			}
+
 			return true
 		}
 	}
