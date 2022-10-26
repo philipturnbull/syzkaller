@@ -611,7 +611,7 @@ func (mgr *Manager) loadCorpus() {
 	log.Logf(0, "%-24v: %v (deleted %v broken)", "corpus", corpusSize, broken)
 
 	for _, seed := range mgr.seeds {
-		mgr.loadProg(seed, true, false)
+		mgr.loadProg("", seed.data, true, false)
 	}
 	log.Logf(0, "%-24v: %v/%v", "seeds", len(mgr.candidates)-corpusSize, len(mgr.seeds))
 	for _, filename := range mgr.loadedSeedFilenames {
