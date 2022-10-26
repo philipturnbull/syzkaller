@@ -63,6 +63,7 @@ type Fuzzer struct {
 	corpusSignal signal.Signal // signal of inputs in corpus
 	maxSignal    signal.Signal // max signal ever observed including flakes
 	newSignal    signal.Signal // diff of maxSignal since last sync with master
+	maxObjectSignal signal.Signal
 
 	checkResult *rpctype.CheckArgs
 	logMu       sync.Mutex
@@ -83,10 +84,17 @@ const (
 	StatTriage
 	StatMinimize
 	StatSmash
+	StatSmashThreadSchedule
+	StatTriageObject
+	StatEnqueueObjectTriage
+	StatDuplicateTriageObject
 	StatHint
 	StatSeed
 	StatCollide
+	StatRandomThread
 	StatBufferTooSmall
+	StatShouldExecute
+	StatShouldNotExecute
 	StatCount
 )
 
@@ -97,10 +105,17 @@ var statNames = [StatCount]string{
 	StatTriage:         "exec triage",
 	StatMinimize:       "exec minimize",
 	StatSmash:          "exec smash",
+	StatSmashThreadSchedule: "exec smash thread",
+	StatTriageObject:	"exec triage object",
+	StatEnqueueObjectTriage: "enqueue object triage",
+	StatDuplicateTriageObject: "duplicate object triage",
 	StatHint:           "exec hints",
 	StatSeed:           "exec seeds",
 	StatCollide:        "exec collide",
+	StatRandomThread:        "exec random thread",
 	StatBufferTooSmall: "buffer too small",
+	StatShouldExecute: "should execute",
+	StatShouldNotExecute: "should not execute",
 }
 
 type OutputType int
@@ -597,6 +612,26 @@ func (fuzzer *Fuzzer) checkNewCallSignal(p *prog.Prog, info *ipc.CallInfo, call 
 	fuzzer.signalMu.Lock()
 	fuzzer.maxSignal.Merge(diff)
 	fuzzer.newSignal.Merge(diff)
+	fuzzer.signalMu.Unlock()
+	fuzzer.signalMu.RLock()
+	return true
+}
+
+func (fuzzer *Fuzzer) checkNewObjectSignal(p *prog.Prog, info *ipc.ProgInfo) (extra bool) {
+	fuzzer.signalMu.RLock()
+	defer fuzzer.signalMu.RUnlock()
+	extra = fuzzer.checkNewObjectCallSignal(p, &info.Extra, -1)
+	return
+}
+
+func (fuzzer *Fuzzer) checkNewObjectCallSignal(p *prog.Prog, info *ipc.CallInfo, call int) bool {
+	diff := fuzzer.maxObjectSignal.DiffRaw(info.ObjectSignal, signalPrio(p, info, call))
+	if diff.Empty() {
+		return false
+	}
+	fuzzer.signalMu.RUnlock()
+	fuzzer.signalMu.Lock()
+	fuzzer.maxObjectSignal.Merge(diff)
 	fuzzer.signalMu.Unlock()
 	fuzzer.signalMu.RLock()
 	return true

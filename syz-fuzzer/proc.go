@@ -72,6 +72,8 @@ func (proc *Proc) loop() {
 			switch item := item.(type) {
 			case *WorkTriage:
 				proc.triageInput(item)
+			case *ObjectTriage:
+				proc.triageObject(item)
 			case *WorkCandidate:
 				proc.execute(proc.execOpts, item.p, item.flags, StatCandidate)
 			case *WorkSmash:
@@ -183,6 +185,31 @@ func (proc *Proc) triageInput(item *WorkTriage) {
 	}
 }
 
+func (proc *Proc) triageObject(item *ObjectTriage) {
+	iterations := 0
+	for _, c := range item.p.Calls {
+		iterations += len(c.Args) * 16
+	}
+
+	log.Logf(1, "#%v: triaging object type=%x, iterations=%d", proc.pid, item.flags, iterations)
+
+	hashes := make(map[string]bool)
+
+	for i := 0; i < iterations; i++ {
+		p := item.p.Clone()
+		if p.MutateLeaves(proc.rnd, proc.fuzzer.choiceTable, proc.fuzzer.noMutate) {
+			data := p.Serialize()
+			h := hash.String(data)
+			if _, ok := hashes[h]; ok {
+				atomic.AddUint64(&proc.fuzzer.stats[StatDuplicateTriageObject], 1)
+			} else {
+				hashes[h] = true
+				proc.execute(proc.execOpts, p, ProgNormal, StatTriageObject)
+			}
+		}
+	}
+}
+
 func reexecutionSuccess(info *ipc.ProgInfo, oldInfo *ipc.CallInfo, call int) bool {
 	if info == nil || len(info.Calls) == 0 {
 		return false
@@ -214,11 +241,25 @@ func (proc *Proc) smashInput(item *WorkSmash) {
 		proc.executeHintSeed(item.p, item.call)
 	}
 	fuzzerSnapshot := proc.fuzzer.snapshot()
+	for i := 0; i < 10; i++ {
+		p := item.p.Clone()
+		p.MutateThreadSchedule(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
+		log.Logf(1, "#%v: smash mutated thread-schedule", proc.pid)
+		proc.execute(proc.execOpts, p, ProgNormal, StatSmashThreadSchedule)
+	}
+
+	for i := 0; i < 30; i++ {
+		p := item.p.Clone()
+		p.RandomizeThreadSchedule(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
+		log.Logf(1, "#%v: smash mutated thread-schedule-random", proc.pid)
+		proc.execute(proc.execOpts, p, ProgNormal, StatSmashThreadSchedule)
+	}
+
 	for i := 0; i < 100; i++ {
 		p := item.p.Clone()
 		p.Mutate(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
 		log.Logf(1, "#%v: smash mutated", proc.pid)
-		proc.executeAndCollide(proc.execOpts, p, ProgNormal, StatSmash)
+		proc.execute(proc.execOpts, p, ProgNormal, StatSmash)
 	}
 }
 
@@ -263,6 +304,12 @@ func (proc *Proc) execute(execOpts *ipc.ExecOpts, p *prog.Prog, flags ProgTypes,
 	if extra {
 		proc.enqueueCallTriage(p, flags, -1, info.Extra)
 	}
+
+	objectExtra := proc.fuzzer.checkNewObjectSignal(p, info)
+	if objectExtra {
+		proc.enqueueObjectTriage(p, flags)
+	}
+
 	return info
 }
 
@@ -280,8 +327,32 @@ func (proc *Proc) enqueueCallTriage(p *prog.Prog, flags ProgTypes, callIndex int
 	})
 }
 
+func (proc *Proc) enqueueObjectTriage(p *prog.Prog, flags ProgTypes) {
+	atomic.AddUint64(&proc.fuzzer.stats[StatEnqueueObjectTriage], 1)
+	log.Logf(1, "#%v: enqueued object triage", proc.pid)
+	proc.fuzzer.workQueue.enqueue(&ObjectTriage{
+		p:     p.Clone(),
+		flags: flags,
+	})
+}
+
 func (proc *Proc) executeAndCollide(execOpts *ipc.ExecOpts, p *prog.Prog, flags ProgTypes, stat Stat) {
 	proc.execute(execOpts, p, flags, stat)
+
+	fuzzerSnapshot := proc.fuzzer.snapshot()
+	for i := 0; i < 3; i++ {
+		p := p.Clone()
+		p.MutateThreadSchedule(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
+		log.Logf(1, "#%v: exec mutated thread-schedule", proc.pid)
+		proc.execute(proc.execOpts, p, ProgNormal, StatRandomThread)
+	}
+
+	for i := 0; i < 7; i++ {
+		p := p.Clone()
+		p.RandomizeThreadSchedule(proc.rnd, prog.RecommendedCalls, proc.fuzzer.choiceTable, proc.fuzzer.noMutate, fuzzerSnapshot.corpus)
+		log.Logf(1, "#%v: exec mutated thread-schedule-random", proc.pid)
+		proc.execute(proc.execOpts, p, ProgNormal, StatRandomThread)
+	}
 
 	if proc.execOptsCollide.Flags&ipc.FlagThreaded == 0 {
 		// We cannot collide syscalls without being in the threaded mode.
@@ -310,6 +381,15 @@ func (proc *Proc) randomCollide(origP *prog.Prog) *prog.Prog {
 
 func (proc *Proc) executeRaw(opts *ipc.ExecOpts, p *prog.Prog, stat Stat) *ipc.ProgInfo {
 	proc.fuzzer.checkDisabledCalls(p)
+
+	should_execute, reason, _ := p.ShouldExecuteProg()
+	if should_execute {
+		atomic.AddUint64(&proc.fuzzer.stats[StatShouldExecute], 1)
+	} else {
+		log.Logf(0, "executeRaw: not executing, %s\n", reason)
+		atomic.AddUint64(&proc.fuzzer.stats[StatShouldNotExecute], 1)
+		return nil
+	}
 
 	// Limit concurrency window and do leak checking once in a while.
 	ticket := proc.fuzzer.gate.Enter()
