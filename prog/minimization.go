@@ -6,7 +6,6 @@ package prog
 import (
 	"bytes"
 	"fmt"
-	"reflect"
 )
 
 // Minimize minimizes program p into an equivalent program using the equivalence
