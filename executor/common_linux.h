@@ -4142,7 +4142,19 @@ static int namespace_sandbox_proc(void* arg)
 	if (chdir("/"))
 		fail("chdir failed");
 	setup_binderfs();
-	drop_caps();
+
+	{
+		struct __user_cap_header_struct cap_hdr = {};
+		struct __user_cap_data_struct cap_data[2] = {};
+		cap_hdr.version = _LINUX_CAPABILITY_VERSION_3;
+		cap_hdr.pid = getpid();
+		if (syscall(SYS_capget, &cap_hdr, &cap_data))
+			fail("capget failed");
+		if (cap_data[0].effective != 0xffffffff)
+			fail("cap_data[0].effective != -1");
+		if (cap_data[0].permitted != 0xffffffff)
+			fail("cap_data[0].permitted != -1");
+	}
 
 	loop();
 	doexit(1);
