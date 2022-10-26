@@ -188,7 +188,7 @@ func RunManager(cfg *mgrconfig.Config) {
 		reporter:         reporter,
 		crashdir:         crashdir,
 		startTime:        time.Now(),
-		stats:            &Stats{haveHub: cfg.HubClient != ""},
+		stats:            &Stats{haveHub: cfg.HubClient != "", wq: make(map[string]rpctype.WQState)},
 		crashTypes:       make(map[string]bool),
 		corpus:           make(map[string]CorpusItem),
 		disabledHashes:   make(map[string]struct{}),
@@ -227,6 +227,8 @@ func RunManager(cfg *mgrconfig.Config) {
 			now := time.Now()
 			diff := now.Sub(lastTime)
 			lastTime = now
+
+			wq := rpctype.WQState{}
 			mgr.mu.Lock()
 			if mgr.firstConnect.IsZero() {
 				mgr.mu.Unlock()
@@ -238,12 +240,21 @@ func RunManager(cfg *mgrconfig.Config) {
 			corpusCover := mgr.stats.corpusCover.get()
 			corpusSignal := mgr.stats.corpusSignal.get()
 			maxSignal := mgr.stats.maxSignal.get()
+
+			for _, state := range mgr.stats.wq {
+				wq.TriageCandidate += state.TriageCandidate
+				wq.Candidate += state.Candidate
+				wq.Triage += state.Triage
+				wq.Smash += state.Smash
+				wq.Object += state.Object
+			}
+
 			mgr.mu.Unlock()
 			numReproducing := atomic.LoadUint32(&mgr.numReproducing)
 			numFuzzing := atomic.LoadUint32(&mgr.numFuzzing)
 
-			log.Logf(0, "VMs %v, executed %v, cover %v, signal %v/%v, crashes %v, repro %v",
-				numFuzzing, executed, corpusCover, corpusSignal, maxSignal, crashes, numReproducing)
+			log.Logf(0, "VMs %v, executed %v, cover %v, signal %v/%v, crashes %v, repro %v wq=(triageCandidate=%d/candidate=%d/triage=%d/smash=%d/object=%d)",
+				numFuzzing, executed, corpusCover, corpusSignal, maxSignal, crashes, numReproducing, wq.TriageCandidate, wq.Candidate, wq.Triage, wq.Smash, wq.Object)
 		}
 	}()
 
@@ -291,6 +302,13 @@ func RunManager(cfg *mgrconfig.Config) {
 		return
 	}
 	mgr.vmLoop()
+}
+
+func (mgr *Manager) addWQState(vm string, state rpctype.WQState) {
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+
+	mgr.stats.wq[vm] = state
 }
 
 type RunResult struct {

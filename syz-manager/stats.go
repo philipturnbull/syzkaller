@@ -9,6 +9,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/google/syzkaller/pkg/rpctype"
 )
 
 type Stat uint64
@@ -32,6 +33,7 @@ type Stats struct {
 	corpusCoverFiltered Stat
 	corpusSignal        Stat
 	maxSignal           Stat
+	wq		map[string]rpctype.WQState
 
 	mu         sync.Mutex
 	namedStats map[string]uint64

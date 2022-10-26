@@ -63,6 +63,7 @@ type RPCManagerView interface {
 	newInput(inp rpctype.Input, sign signal.Signal) bool
 	candidateBatch(size int) []rpctype.Candidate
 	rotateCorpus() bool
+	addWQState(vm string, state rpctype.WQState)
 }
 
 func startRPCServer(mgr *Manager) (*RPCServer, error) {
@@ -379,8 +380,9 @@ func (serv *RPCServer) Poll(a *rpctype.PollArgs, r *rpctype.PollRes) error {
 			f.inputs = nil
 		}
 	}
-	log.Logf(4, "poll from %v: candidates=%v inputs=%v maxsignal=%v",
-		a.Name, len(r.Candidates), len(r.NewInputs), len(r.MaxSignal.Elems))
+	serv.mgr.addWQState(a.Name, a.WQState)
+	log.Logf(4, "poll from %v: candidates=%v inputs=%v maxsignal=%v wq=(triageCandidate=%d/candidate=%d/triage=%d/smash=%d/object=%d)",
+		a.Name, len(r.Candidates), len(r.NewInputs), len(r.MaxSignal.Elems), a.WQState.TriageCandidate, a.WQState.Candidate, a.WQState.Triage, a.WQState.Smash, a.WQState.Object)
 	return nil
 }
 

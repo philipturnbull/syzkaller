@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/syzkaller/pkg/ipc"
 	"github.com/google/syzkaller/prog"
+	"github.com/google/syzkaller/pkg/rpctype"
 )
 
 // WorkQueue holds global non-fuzzing work items (see the Work* structs below).
@@ -92,6 +93,18 @@ func (wq *WorkQueue) enqueue(item interface{}) {
 		wq.object = append(wq.object, item)
 	default:
 		panic("unknown work type")
+	}
+}
+
+func (wq *WorkQueue) stats() rpctype.WQState {
+	wq.mu.RLock()
+	defer wq.mu.RUnlock()
+	return rpctype.WQState {
+		TriageCandidate: len(wq.triageCandidate),
+		Candidate: len(wq.candidate),
+		Triage: len(wq.triage),
+		Smash: len(wq.smash),
+		Object: len(wq.object),
 	}
 }
 

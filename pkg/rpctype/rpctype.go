@@ -70,11 +70,20 @@ type NewInputArgs struct {
 	Input
 }
 
+type WQState struct {
+	TriageCandidate int
+	Candidate int
+	Triage	int
+	Smash int
+	Object int
+}
+
 type PollArgs struct {
 	Name           string
 	NeedCandidates bool
 	MaxSignal      signal.Serial
 	Stats          map[string]uint64
+	WQState	       WQState
 }
 
 type PollRes struct {
