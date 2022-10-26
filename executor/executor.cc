@@ -510,7 +510,6 @@ int main(int argc, char** argv)
 #else
 	receive_execute();
 #endif
-	debug("flag_coverge=%d\n", flag_coverage);
 	if (flag_coverage) {
 		int create_count = kCoverDefaultCount, mmap_count = create_count;
 		if (flag_delay_kcov_mmap) {
