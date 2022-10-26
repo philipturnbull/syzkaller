@@ -120,6 +120,7 @@ func (proc *Proc) triageInput(item *WorkTriage) {
 		logCallName = fmt.Sprintf("call #%v %v", item.call, callName)
 	}
 	log.Logf(3, "triaging input for %v (new signal=%v)", logCallName, newSignal.Len())
+	log.Logf(3, "%s", item.p.SerializeVerbose())
 	var inputCover cover.Cover
 	const (
 		signalRuns       = 3
@@ -151,8 +152,11 @@ func (proc *Proc) triageInput(item *WorkTriage) {
 		inputCover.Merge(thisCover)
 	}
 	if item.flags&ProgMinimized == 0 {
+		log.Logf(3, "minimizing...")
 		item.p, item.call = prog.Minimize(item.p, item.call, false,
 			func(p1 *prog.Prog, call1 int) bool {
+				log.Logf(3, "--------------------------------------------------------------------------------")
+				log.Logf(3, "%s", item.p.SerializeVerbose())
 				for i := 0; i < minimizeAttempts; i++ {
 					info := proc.execute(proc.execOpts, p1, ProgNormal, StatMinimize)
 					if !reexecutionSuccess(info, &item.info, call1) {
@@ -166,6 +170,10 @@ func (proc *Proc) triageInput(item *WorkTriage) {
 				}
 				return false
 			})
+
+		log.Logf(3, "--------------------------------------------------------------------------------")
+		log.Logf(3, "minimized:")
+		log.Logf(3, "%s", item.p.SerializeVerbose())
 	}
 
 	data := item.p.Serialize()
