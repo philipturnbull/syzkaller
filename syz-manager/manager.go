@@ -44,6 +44,11 @@ var (
 	flagBench  = flag.String("bench", "", "write execution statistics into this file periodically")
 )
 
+type Seed struct {
+	data []byte
+	filename string
+}
+
 type Manager struct {
 	cfg            *mgrconfig.Config
 	vmPool         *vm.Pool
@@ -71,9 +76,10 @@ type Manager struct {
 	targetEnabledSyscalls map[*prog.Syscall]bool
 
 	candidates       []rpctype.Candidate // untriaged inputs from corpus and hub
+	loadedSeedFilenames []string
 	disabledHashes   map[string]struct{}
 	corpus           map[string]CorpusItem
-	seeds            [][]byte
+	seeds            []Seed
 	newRepros        [][]byte
 	lastMinCorpus    int
 	memoryLeakFrames map[string]bool
@@ -564,7 +570,7 @@ func (mgr *Manager) preloadCorpus() {
 			if err != nil {
 				log.Fatalf("failed to read seed %v: %v", seed.Name(), err)
 			}
-			mgr.seeds = append(mgr.seeds, data)
+			mgr.seeds = append(mgr.seeds, Seed { data: data, filename: seed.Name() })
 		}
 	}
 }
@@ -595,7 +601,7 @@ func (mgr *Manager) loadCorpus() {
 	}
 	broken := 0
 	for key, rec := range mgr.corpusDB.Records {
-		if !mgr.loadProg(rec.Val, minimized, smashed) {
+		if !mgr.loadProg("", rec.Val, minimized, smashed) {
 			mgr.corpusDB.Delete(key)
 			broken++
 		}
@@ -608,6 +614,9 @@ func (mgr *Manager) loadCorpus() {
 		mgr.loadProg(seed, true, false)
 	}
 	log.Logf(0, "%-24v: %v/%v", "seeds", len(mgr.candidates)-corpusSize, len(mgr.seeds))
+	for _, filename := range mgr.loadedSeedFilenames {
+		log.Logf(0, "  %s", filename)
+	}
 	mgr.seeds = nil
 
 	// We duplicate all inputs in the corpus and shuffle the second part.
@@ -626,7 +635,7 @@ func (mgr *Manager) loadCorpus() {
 	mgr.phase = phaseLoadedCorpus
 }
 
-func (mgr *Manager) loadProg(data []byte, minimized, smashed bool) bool {
+func (mgr *Manager) loadProg(filename string, data []byte, minimized, smashed bool) bool {
 	bad, disabled := checkProgram(mgr.target, mgr.targetEnabledSyscalls, data)
 	if bad {
 		return false
@@ -657,6 +666,9 @@ func (mgr *Manager) loadProg(data []byte, minimized, smashed bool) bool {
 		Minimized: minimized,
 		Smashed:   smashed,
 	})
+	if filename != "" {
+		mgr.loadedSeedFilenames = append(mgr.loadedSeedFilenames, filename)
+	}
 	return true
 }
 
@@ -689,6 +701,11 @@ func checkProgram(target *prog.Target, enabled map[*prog.Syscall]bool, data []by
 			return false, true
 		}
 	}
+
+	if ok, _, _ := p.ShouldExecuteProg(); !ok {
+		return true, true
+	}
+
 	return false, false
 }
 
