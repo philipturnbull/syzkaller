@@ -81,5 +81,5 @@ func main() {
 		}
 		p.Mutate(rs, *flagLen, ct, nil, corpus)
 	}
-	fmt.Printf("%s\n", p.Serialize())
+	fmt.Printf("%s\n", p.SerializeVerbose())
 }
