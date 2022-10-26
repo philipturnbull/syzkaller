@@ -10,6 +10,7 @@ import (
 
 type Prog struct {
 	Target   *Target
+	ThreadSchedule []int
 	Calls    []*Call
 	Comments []string
 }

@@ -31,6 +31,7 @@ const (
 	execInstrCopyin
 	execInstrCopyout
 	execInstrSetProps
+	execInstrThreadSchedule
 )
 
 const (
@@ -58,6 +59,7 @@ const (
 	execMaxCommands = 1000 // executor knows about this constant (kMaxCommands)
 )
 
+var ErrExecNoSchedule = errors.New("encodingexec: no thread schedule set")
 var ErrExecBufferTooSmall = errors.New("encodingexec: provided buffer is too small")
 
 // SerializeForExec serializes program p for execution by process pid into the provided buffer.
@@ -71,6 +73,10 @@ func (p *Prog) SerializeForExec(buffer []byte) (int, error) {
 		eof:    false,
 		args:   make(map[Arg]argInfo),
 	}
+	if len(p.ThreadSchedule) == 0 {
+		return 0, ErrExecNoSchedule
+	}
+	w.serializeThreadSchedule(p.ThreadSchedule)
 	for _, c := range p.Calls {
 		w.csumMap, w.csumUses = calcChecksumsCall(c)
 		w.serializeCall(c)
@@ -80,6 +86,15 @@ func (p *Prog) SerializeForExec(buffer []byte) (int, error) {
 		return 0, ErrExecBufferTooSmall
 	}
 	return len(buffer) - len(w.buf), nil
+}
+
+func (w *execContext) serializeThreadSchedule(schedule []int) {
+	w.write(execInstrThreadSchedule)
+	w.write(uint64(len(schedule)))
+	// TODO: write these as bytes
+	for _, thread := range schedule {
+		w.write(uint64(thread))
+	}
 }
 
 func (w *execContext) serializeCall(c *Call) {

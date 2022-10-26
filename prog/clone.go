@@ -11,6 +11,7 @@ func (p *Prog) Clone() *Prog {
 	newargs := make(map[*ResultArg]*ResultArg)
 	p1 := &Prog{
 		Target: p.Target,
+		ThreadSchedule: append([]int{}, p.ThreadSchedule...),
 		Calls:  cloneCalls(p.Calls, newargs),
 	}
 	p1.debugValidate()
