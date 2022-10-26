@@ -84,6 +84,7 @@ func (ctx *mutator) mutateLeafArg() bool {
 	if ctx.noMutate[c.Meta.ID] {
 		return false
 	}
+	iterations := 0
 	updateSizes := true
 	for stop, ok := false, false; !stop; stop = ok && r.oneOf(3) {
 		ok = true
@@ -96,6 +97,10 @@ func (ctx *mutator) mutateLeafArg() bool {
 
 		arg, argCtx := ma.chooseArg(r.Rand)
 		for {
+			if iterations > 32 {
+				return false
+			}
+			iterations += 1
 			mutate := false
 
 			switch arg.Type().(type) {
