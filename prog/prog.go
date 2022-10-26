@@ -700,6 +700,7 @@ func (p *Prog) AnalyzeThreads() ProgThreadInfo {
 }
 
 const NotEnoughCalls = "not enought calls"
+const MissingRequiredCall = "missing required call"
 const MissingThread1 = "missing thread 1"
 const MissingThread2 = "missing thread 1"
 const CallInThread1DoesNotUseReturnArg = "call in thread 1 does not use return arg"
@@ -712,6 +713,12 @@ func (p *Prog) ShouldExecuteProg() (bool, string, ProgThreadInfo) {
 
 	if info.NumCalls < 2 {
 		return false, NotEnoughCalls, info
+	}
+
+	for _, callName := range requiredCalls() {
+		if !p.hasCall(callName) {
+			return false, MissingRequiredCall, info
+		}
 	}
 
 	if info.NumThreadCalls[1] == 0 {
@@ -776,6 +783,23 @@ func (p *Prog) SwitchThreadIndex(from int, to int, panicReason string) bool {
 	return p.FixupThreads()
 }
 
+func requiredCalls() []string {
+	return []string {
+		"pipe2$watch_queue",
+		"ioctl$IOC_WATCH_QUEUE_SET_SIZE",
+		"keyctl$KEYCTL_WATCH_KEY",
+	}
+}
+
+func (p *Prog) hasCall(callName string) bool {
+	for _, call := range p.Calls {
+		if call.Meta.Name == callName {
+			return true
+		}
+	}
+
+	return false
+}
 
 func (p *Prog) FixupThreads() bool {
 	ok, reason, info := p.ShouldExecuteProg()
