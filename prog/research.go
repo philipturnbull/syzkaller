@@ -10,6 +10,7 @@ type ResearchConfig struct {
 	requiredResource []string
 	requiredCalls []string
 	expectedSeedFiles []string
+	doNotMinimizePointersToGroup []string
 }
 
 func currentResearchConfig() ResearchConfig {
@@ -35,6 +36,9 @@ func currentResearchConfig() ResearchConfig {
 			"keyctl_link",
 			"keyctl_revoke",
 			"keyctl_update",
+		},
+		doNotMinimizePointersToGroup: []string {
+			"pipefd$watch_queue",
 		},
 	}
 }
@@ -77,4 +81,16 @@ func requiredResource(a *ResourceType) bool {
 
 func requiredCalls() []string {
 	return currentResearchConfig().requiredCalls
+}
+
+func doNotMinimizePointersToGroup(group *GroupArg) bool {
+	names := currentResearchConfig().doNotMinimizePointersToGroup
+
+	for _, name := range names {
+		if group.Type().Name() == name {
+			return true
+		}
+	}
+
+	return false
 }

@@ -179,6 +179,13 @@ func (typ *PtrType) minimize(ctx *minimizeArgsCtx, arg Arg, path string) bool {
 	if a.Res == nil {
 		return false
 	}
+
+	if group, ok := a.Res.(*GroupArg); ok {
+		if doNotMinimizePointersToGroup(group) {
+			return false
+		}
+	}
+
 	if path1 := path + ">"; !ctx.triedPaths[path1] {
 		removeArg(a.Res)
 		replaceArg(a, MakeSpecialPointerArg(a.Type(), a.Dir(), 0))
@@ -261,6 +268,9 @@ func minimizeInt(ctx *minimizeArgsCtx, arg Arg, path string) bool {
 }
 
 func (typ *ResourceType) minimize(ctx *minimizeArgsCtx, arg Arg, path string) bool {
+	if requiredResource(typ) {
+		return false
+	}
 	if ctx.crash {
 		return false
 	}
