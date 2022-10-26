@@ -521,7 +521,6 @@ int main(int argc, char** argv)
 			create_count = kMaxThreads;
 		for (int i = 0; i < create_count; i++) {
 			threads[i].cov.fd = kCoverFd + i;
-			debug("threads[%d].cov.fd = %d\n", i, threads[i].cov.fd);
 			cover_open(&threads[i].cov, false);
 			if (i < mmap_count) {
 				// Pre-mmap coverage collection for some threads. This should be enough for almost
