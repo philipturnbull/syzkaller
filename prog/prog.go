@@ -6,6 +6,7 @@ package prog
 import (
 	"fmt"
 	"reflect"
+	"sort"
 
 	"github.com/google/syzkaller/pkg/log"
 )
@@ -671,6 +672,16 @@ func (p *Prog) ShouldExecuteProg() (bool, string, ProgThreadInfo) {
 	return false, NoOverlap, info
 }
 
+type ByThreadIndex []*Call
+
+func (a ByThreadIndex) Len() int           { return len(a) }
+func (a ByThreadIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByThreadIndex) Less(i, j int) bool { return a[i].Props.ThreadIndex < a[j].Props.ThreadIndex }
+
+func (p *Prog) NormalizeThreads() {
+	sort.Sort(ByThreadIndex(p.Calls))
+}
+
 func (p *Prog) SwitchThreadIndex(from int, to int, panicReason string) bool {
 	info := p.AnalyzeThreads()
 
@@ -703,6 +714,8 @@ func (p *Prog) SwitchThreadIndex(from int, to int, panicReason string) bool {
 }
 
 func (p *Prog) FixupThreads() bool {
+	p.NormalizeThreads()
+
 	ok, reason, info := p.ShouldExecuteProg()
 	if ok {
 		return true
