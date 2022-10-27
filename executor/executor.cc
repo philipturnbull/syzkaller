@@ -1529,16 +1529,19 @@ void write_object_overlaps()
 		write_output(-1); // call num
 		write_output(999); // errno
 		write_output(0); // call flags
-		write_output(0); // signal
+		uint32* signal_count_pos = write_output(0); // filled in later
 		uint32* object_signal_count_pos = write_output(0); // filled in later
 		write_output(0); // cover_count_pos
 		write_output(0); // comps_count_pos
 
-		for (int i = 0; i < num_object_overlaps; i++) {
-			uint32_t hash = object_overlaps[i].hash;
-			write_output(hash);
+		for (int k = 0; k < 2; k++) {
+			for (int i = 0; i < num_object_overlaps; i++) {
+				uint32_t hash = object_overlaps[i].hash;
+				write_output(hash);
+			}
 		}
 
+		*signal_count_pos = num_object_overlaps;
 		*object_signal_count_pos = num_object_overlaps;
 
 		completed++;
